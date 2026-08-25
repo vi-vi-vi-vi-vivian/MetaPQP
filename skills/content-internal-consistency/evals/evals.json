@@ -1,0 +1,17 @@
+{
+  "skill_name": "content-internal-consistency",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "套餐区写‘购买后不支持退订’，FAQ 写‘Token Plan 可随时退订’，两处均指同一产品。",
+      "expected_output": "fail，引用两处冲突文案及元素",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "套餐区写月付价格，FAQ 解释年付产品的退款规则。",
+      "expected_output": "不把不同计费条件直接判为冲突",
+      "files": []
+    }
+  ]
+}

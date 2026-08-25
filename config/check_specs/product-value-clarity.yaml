@@ -1,0 +1,14 @@
+id: product-value-clarity
+version: 1.1.0
+title: 产品价值应清晰可理解
+description: 产品落地页应明确说明面向谁、解决什么问题和核心收益。
+tags: [content, awareness, product-value]
+applies_when: {archetypes: [product_landing]}
+required_evidence: [visible_text, headings]
+executor: {type: model_skill, capability_id: product-value}
+default_severity: p1
+standard_refs:
+  - criterion_id: metapqp-internal/product-value-clarity
+    relation: implements
+  - criterion_id: nielsen-heuristics/H2
+    relation: inspired_by

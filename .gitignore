@@ -1,0 +1,28 @@
+# Python environments and generated caches
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.DS_Store
+.idea/
+
+# Local browser and workflow diagnostics
+.playwright-cli/
+logs/
+
+# Runtime state and generated audit artifacts
+data/
+output/
+
+# Local credentials and environment overrides
+.env
+.env.*
+!.env.example
+config/auth/account.local.yaml
+
+# Local Codex workspace settings
+.codex/
+
+# Git metadata fallback used when the sandbox blocks a root .git directory
+.repo/

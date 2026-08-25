@@ -1,0 +1,15 @@
+id: document-structure
+version: 1.2.0
+title: 页面应具有描述主题的 Title
+description: 页面应包含能够描述当前主题的非空 Title；H1 数量仅作为采集事实，不据此生成问题。
+tags: [baseline, accessibility]
+applies_when: {}
+required_evidence: [title, headings]
+executor: {type: deterministic, capability_id: document-structure-checker, version: 1.1.0}
+default_severity: p2
+standard_refs:
+  - criterion_id: metapqp-internal/document-structure
+    relation: implements
+  - criterion_id: wcag-2.2/2.4.2
+    relation: partial_coverage
+    notes: 自动检查 Title 是否非空；标题能否充分描述主题仍需结合语义判断。

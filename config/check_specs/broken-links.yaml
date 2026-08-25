@@ -1,0 +1,12 @@
+id: broken-links
+version: 1.2.0
+title: 页面可见链接不应确认失效
+description: 对有限数量的可见 HTTP 链接执行安全状态检查；明确的客户端或服务端错误判为失效，超时、连接错误、鉴权和限流只标记为待验证。
+tags: [baseline, navigation]
+applies_when: {}
+required_evidence: [interactive_elements]
+executor: {type: deterministic, capability_id: broken-links-checker, version: 1.1.0}
+default_severity: p1
+standard_refs:
+  - criterion_id: metapqp-internal/broken-links
+    relation: implements

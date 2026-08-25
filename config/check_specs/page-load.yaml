@@ -1,0 +1,12 @@
+id: page-load
+version: 1.1.0
+title: 页面应正常加载
+description: 页面应返回有效状态且主体内容非空。
+tags: [baseline, availability]
+applies_when: {}
+required_evidence: [navigation, visible_text]
+executor: {type: deterministic, capability_id: page-load-checker}
+default_severity: p0
+standard_refs:
+  - criterion_id: metapqp-internal/page-load
+    relation: implements

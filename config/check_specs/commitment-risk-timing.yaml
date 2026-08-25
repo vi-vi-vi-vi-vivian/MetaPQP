@@ -1,0 +1,16 @@
+id: commitment-risk-timing
+version: 1.2.0
+title: 购买页应清楚披露订阅与退订风险
+description: 先检查当前页面是否清楚展示自动扣款、续期、不可退订、退款和到期等适用风险；不按 CTA 与提示的 DOM 前后顺序机械失败，当前页缺失但后续确认页未检查时转为待验证。
+tags: [purchase, financial, risk]
+applies_when: {stages: [purchase, order, payment], features_any: [purchase_entry]}
+required_evidence: [visible_text, interactive_elements, evidence_elements]
+executor: {type: model_skill, capability_id: commitment-risk-timing, version: 1.1.0}
+default_severity: p1
+standard_refs:
+  - criterion_id: metapqp-internal/commitment-risk-timing
+    relation: implements
+  - criterion_id: nielsen-heuristics/H3
+    relation: inspired_by
+  - criterion_id: nielsen-heuristics/H5
+    relation: inspired_by

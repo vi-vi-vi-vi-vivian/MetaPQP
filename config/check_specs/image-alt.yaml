@@ -1,0 +1,15 @@
+id: image-alt
+version: 1.2.0
+title: 信息图片和图像控件应具有可访问名称
+description: 信息图片应提供等价文本，装饰图片应使用空 Alt；图标旁已有等价文本时不重复报错，图片用途不明确时转人工确认。
+tags: [content, accessibility, image]
+applies_when: {}
+required_evidence: [evidence_elements]
+executor: {type: deterministic, capability_id: image-alt-checker, version: 1.1.0}
+default_severity: p2
+standard_refs:
+  - criterion_id: metapqp-internal/image-alt
+    relation: implements
+  - criterion_id: wcag-2.2/1.1.1
+    relation: partial_coverage
+    notes: 自动检查可见 img 的 Alt、可访问名称和邻近等价文本；无法判断图片用途时不形成违规结论。

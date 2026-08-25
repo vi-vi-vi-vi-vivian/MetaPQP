@@ -1,0 +1,15 @@
+id: mobile-tap-target-size
+version: 1.1.0
+title: 移动端关键控件应具备足够触控区域
+description: 按钮、表单控件或显式按钮角色任一边低于 24 CSS px 时失败；明显图标链接仅在宽高均低于 24 CSS px 时失败，普通行内文本链接不判定。
+tags: [mobile, interaction, touch, accessibility]
+applies_when: {devices: [mobile]}
+required_evidence: [interactive_elements, mobile_layout]
+executor: {type: deterministic, capability_id: mobile-tap-target-checker}
+default_severity: p2
+standard_refs:
+  - criterion_id: metapqp-internal/mobile-tap-target-size
+    relation: implements
+  - criterion_id: wcag-2.2/2.5.8
+    relation: partial_coverage
+    notes: 检查目标本身尺寸，暂不完整判断间距和成功准则中的例外条件。

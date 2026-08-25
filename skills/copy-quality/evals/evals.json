@@ -1,0 +1,23 @@
+{
+  "skill_name": "copy-quality",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "检查文案：‘订阅后可立即使用，购买后后不支持退订。’元素引用 dom-12。",
+      "expected_output": "fail，定位重复的‘后后’，建议改成‘购买后不支持退订’，引用 dom-12",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "检查文案：‘支持 GLM、Kimi 与 DeepSeek-V3.2’，这些都是页面已定义的模型名。",
+      "expected_output": "pass，不把产品或模型专名误判为错别字",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "检查文案：‘适用文件处理’，编辑可以改成‘适用于文件处理’，但原句作为套餐能力短标签能够正常理解。",
+      "expected_output": "pass；原文不构成错别字或明确语病，不输出润色建议",
+      "files": []
+    }
+  ]
+}

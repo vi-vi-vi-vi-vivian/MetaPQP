@@ -1,0 +1,14 @@
+id: terminology-clarity
+version: 1.1.0
+title: 专业术语和计费名词应清晰可理解
+description: 检查缩写、专业术语、状态名和计费名词是否在决策语境中容易理解。
+tags: [content, terminology, comprehension]
+applies_when: {}
+required_evidence: [visible_text, evidence_elements]
+executor: {type: model_skill, capability_id: terminology-clarity}
+default_severity: p2
+standard_refs:
+  - criterion_id: metapqp-internal/terminology-clarity
+    relation: implements
+  - criterion_id: nielsen-heuristics/H2
+    relation: inspired_by

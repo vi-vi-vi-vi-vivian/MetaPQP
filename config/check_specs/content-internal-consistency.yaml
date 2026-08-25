@@ -1,0 +1,14 @@
+id: content-internal-consistency
+version: 1.1.0
+title: 页面内部产品规则和承诺应保持一致
+description: 比较正文、套餐、FAQ、提示和产品相关 Footer 中的名称、规则、状态与承诺。
+tags: [content, consistency, trust]
+applies_when: {archetypes: [product_landing]}
+required_evidence: [visible_text, evidence_elements]
+executor: {type: model_skill, capability_id: content-internal-consistency}
+default_severity: p1
+standard_refs:
+  - criterion_id: metapqp-internal/content-internal-consistency
+    relation: implements
+  - criterion_id: nielsen-heuristics/H4
+    relation: inspired_by

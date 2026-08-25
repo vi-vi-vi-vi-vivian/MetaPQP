@@ -1,0 +1,12 @@
+id: runtime-errors
+version: 1.2.0
+title: 页面不应出现影响核心功能的运行错误
+description: 已确认失败的主文档请求判为问题；Console Error 和其他失败请求先标记为待验证，只有证明影响页面主体、价格、套餐或核心操作后才形成问题。
+tags: [baseline, reliability]
+applies_when: {}
+required_evidence: [console, network]
+executor: {type: deterministic, capability_id: runtime-errors-checker, version: 1.1.0}
+default_severity: p1
+standard_refs:
+  - criterion_id: metapqp-internal/runtime-errors
+    relation: implements

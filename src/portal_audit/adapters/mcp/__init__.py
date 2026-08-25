@@ -1,0 +1,1 @@
+"""Optional outbound MCP adapters."""

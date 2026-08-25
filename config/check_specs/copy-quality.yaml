@@ -1,0 +1,12 @@
+id: copy-quality
+version: 1.2.0
+title: 页面文案不应包含明确错别字或语病
+description: 只报告能够从完整语境中证明的中文错别字、重复词、缺字、明确语法错误和错误标点；表达习惯、自然度和润色建议不构成问题。
+tags: [content, copy, accuracy]
+applies_when: {locales: [zh-CN]}
+required_evidence: [visible_text, evidence_elements]
+executor: {type: model_skill, capability_id: copy-quality, version: 1.1.0}
+default_severity: p2
+standard_refs:
+  - criterion_id: metapqp-internal/copy-quality
+    relation: implements

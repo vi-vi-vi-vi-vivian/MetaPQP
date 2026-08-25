@@ -1,0 +1,16 @@
+id: cta-clarity
+version: 1.1.0
+title: CTA 应明确表达动作和结果
+description: 购买或订阅入口应让用户理解点击后会发生什么。
+tags: [cta, navigation, purchase]
+applies_when: {features_any: [purchase_entry]}
+required_evidence: [interactive_elements, surrounding_content]
+executor: {type: model_skill, capability_id: cta-clarity}
+default_severity: p1
+standard_refs:
+  - criterion_id: metapqp-internal/cta-clarity
+    relation: implements
+  - criterion_id: nielsen-heuristics/H2
+    relation: inspired_by
+  - criterion_id: nielsen-heuristics/H6
+    relation: inspired_by

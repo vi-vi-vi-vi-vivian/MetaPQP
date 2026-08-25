@@ -1,0 +1,1 @@
+{"skill_name":"pricing-transparency","evals":[{"id":1,"prompt":"四个套餐都展示人民币价格、/月、每订阅月 Tokens 数量和适合人群。","expected_output":"pass，因为套餐比较所需字段完整","files":[]},{"id":2,"prompt":"套餐只展示‘99’，没有币种、周期或资源量。","expected_output":"fail，指出无法核对实际成本并定位该套餐","files":[]}]}

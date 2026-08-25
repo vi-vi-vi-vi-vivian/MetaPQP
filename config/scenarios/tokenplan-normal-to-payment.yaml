@@ -1,0 +1,16 @@
+version: "1.0.0"
+id: tokenplan-normal-to-payment
+product_binding: token-plan
+persona: authenticated-buyer
+auth:
+  mode: required
+  account_id: default
+execution_matrix:
+  source: web
+  devices: [desktop, mobile]
+  locales: [zh-CN, en-US]
+required_stages: [awareness, purchase, order, payment]
+stop_after: payment
+safety:
+  payment_read_only: true
+  payment_action_allowed: false

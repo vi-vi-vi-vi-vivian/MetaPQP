@@ -1,0 +1,1 @@
+{"skill_name":"terminology-clarity","evals":[{"id":1,"prompt":"套餐只写‘1.3亿 Tokens/月’，页面没有解释 Tokens 的用途或适用范围。","expected_output":"根据周边证据判断是否影响套餐选择；若确实无说明则 fail 并定位术语","files":[]},{"id":2,"prompt":"页面使用 API，但同一区域解释为应用程序接口并给出调用示例。","expected_output":"pass，因为术语已在附近解释","files":[]}]}

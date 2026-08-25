@@ -1,0 +1,9 @@
+version: "1"
+account:
+  id: default
+  account_type: huawei_cloud_account
+  provider: huaweicloud
+  enabled: true
+  site: cn
+  username: your-account
+  password: your-password

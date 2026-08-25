@@ -1,0 +1,18 @@
+{
+  "skill_name": "product-value",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Evaluate a product landing page whose hero only says 'Build the future' and lists prices, but never states the target user or problem solved.",
+      "expected_output": "fail with evidence about missing audience/problem and no invented product facts",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "Evaluate a page that explicitly names developers, explains the API task it accelerates, and provides three measurable benefits.",
+      "expected_output": "pass with evidence tied to the supplied claims",
+      "files": []
+    }
+  ]
+}
+

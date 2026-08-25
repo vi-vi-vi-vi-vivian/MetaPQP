@@ -1,0 +1,14 @@
+id: pricing-transparency
+version: 1.1.0
+title: 价格、周期和资源量应能被独立核对
+description: 检查币种、计费单位、周期、资源量、有效期和适用范围是否清楚。
+tags: [pricing, financial, transparency]
+applies_when: {features_any: [pricing]}
+required_evidence: [visible_text, evidence_elements]
+executor: {type: model_skill, capability_id: pricing-transparency}
+default_severity: p1
+standard_refs:
+  - criterion_id: metapqp-internal/pricing-transparency
+    relation: implements
+  - criterion_id: nielsen-heuristics/H2
+    relation: inspired_by

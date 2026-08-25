@@ -1,0 +1,15 @@
+id: mobile-horizontal-overflow
+version: 1.1.0
+title: 移动端页面不应出现意外横向溢出
+description: 在 390 CSS px 的触控设备视口中，排除轮播和显式横向滚动祖先后，检查元素是否超出视口超过 1 CSS px。
+tags: [mobile, layout, responsive, reflow]
+applies_when: {devices: [mobile]}
+required_evidence: [mobile_layout, viewport, screenshot]
+executor: {type: deterministic, capability_id: mobile-horizontal-overflow-checker}
+default_severity: p1
+standard_refs:
+  - criterion_id: metapqp-internal/mobile-horizontal-overflow
+    relation: implements
+  - criterion_id: wcag-2.2/1.4.10
+    relation: partial_coverage
+    notes: 仅验证指定移动视口的横向溢出，不代表完整 WCAG Reflow 合规。

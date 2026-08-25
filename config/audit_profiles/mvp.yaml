@@ -1,0 +1,17 @@
+id: mvp
+version: 1.0.0
+check_specs:
+  - page-load
+  - document-structure
+  - runtime-errors
+  - broken-links
+  - product-value-clarity
+  - cta-clarity
+  - copy-quality
+  - terminology-clarity
+  - content-internal-consistency
+  - pricing-transparency
+  - commitment-risk-timing
+  - image-alt
+  - mobile-horizontal-overflow
+  - mobile-tap-target-size

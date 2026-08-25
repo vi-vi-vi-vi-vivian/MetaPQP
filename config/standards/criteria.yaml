@@ -1,0 +1,100 @@
+criteria:
+  - id: wcag-2.2/1.1.1
+    source_id: wcag-2.2
+    title: Non-text Content
+    level: A
+    url: https://www.w3.org/TR/WCAG22/#non-text-content
+  - id: wcag-2.2/1.3.1
+    source_id: wcag-2.2
+    title: Info and Relationships
+    level: A
+    url: https://www.w3.org/TR/WCAG22/#info-and-relationships
+  - id: wcag-2.2/1.4.10
+    source_id: wcag-2.2
+    title: Reflow
+    level: AA
+    url: https://www.w3.org/TR/WCAG22/#reflow
+  - id: wcag-2.2/2.4.2
+    source_id: wcag-2.2
+    title: Page Titled
+    level: A
+    url: https://www.w3.org/TR/WCAG22/#page-titled
+  - id: wcag-2.2/2.5.8
+    source_id: wcag-2.2
+    title: Target Size (Minimum)
+    level: AA
+    url: https://www.w3.org/TR/WCAG22/#target-size-minimum
+
+  - id: nielsen-heuristics/H1
+    source_id: nielsen-heuristics
+    title: Visibility of System Status
+  - id: nielsen-heuristics/H2
+    source_id: nielsen-heuristics
+    title: Match Between the System and the Real World
+  - id: nielsen-heuristics/H3
+    source_id: nielsen-heuristics
+    title: User Control and Freedom
+  - id: nielsen-heuristics/H4
+    source_id: nielsen-heuristics
+    title: Consistency and Standards
+  - id: nielsen-heuristics/H5
+    source_id: nielsen-heuristics
+    title: Error Prevention
+  - id: nielsen-heuristics/H6
+    source_id: nielsen-heuristics
+    title: Recognition Rather than Recall
+  - id: nielsen-heuristics/H7
+    source_id: nielsen-heuristics
+    title: Flexibility and Efficiency of Use
+  - id: nielsen-heuristics/H8
+    source_id: nielsen-heuristics
+    title: Aesthetic and Minimalist Design
+  - id: nielsen-heuristics/H9
+    source_id: nielsen-heuristics
+    title: Help Users Recognize, Diagnose, and Recover from Errors
+  - id: nielsen-heuristics/H10
+    source_id: nielsen-heuristics
+    title: Help and Documentation
+
+  - id: metapqp-internal/broken-links
+    source_id: metapqp-internal
+    title: 页面可见链接不应确认失效
+  - id: metapqp-internal/commitment-risk-timing
+    source_id: metapqp-internal
+    title: 订阅与退订风险应在决策前清楚披露
+  - id: metapqp-internal/content-internal-consistency
+    source_id: metapqp-internal
+    title: 页面内部产品规则和承诺应保持一致
+  - id: metapqp-internal/copy-quality
+    source_id: metapqp-internal
+    title: 页面文案不应包含明确错别字或语病
+  - id: metapqp-internal/cta-clarity
+    source_id: metapqp-internal
+    title: CTA 应明确表达动作和结果
+  - id: metapqp-internal/document-structure
+    source_id: metapqp-internal
+    title: 页面应具有描述主题的 Title
+  - id: metapqp-internal/image-alt
+    source_id: metapqp-internal
+    title: 信息图片和图像控件应具有可访问名称
+  - id: metapqp-internal/mobile-horizontal-overflow
+    source_id: metapqp-internal
+    title: 移动端页面不应出现意外横向溢出
+  - id: metapqp-internal/mobile-tap-target-size
+    source_id: metapqp-internal
+    title: 移动端关键控件应具备足够触控区域
+  - id: metapqp-internal/page-load
+    source_id: metapqp-internal
+    title: 页面应正常加载
+  - id: metapqp-internal/pricing-transparency
+    source_id: metapqp-internal
+    title: 价格、周期和资源量应能被独立核对
+  - id: metapqp-internal/product-value-clarity
+    source_id: metapqp-internal
+    title: 产品价值应清晰可理解
+  - id: metapqp-internal/runtime-errors
+    source_id: metapqp-internal
+    title: 页面不应出现影响核心功能的运行错误
+  - id: metapqp-internal/terminology-clarity
+    source_id: metapqp-internal
+    title: 专业术语和计费名词应清晰可理解

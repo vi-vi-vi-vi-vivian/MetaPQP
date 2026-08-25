@@ -1,0 +1,14 @@
+id: mvp
+version: 1.0.0
+model_batches:
+  - id: content-understanding
+    check_specs:
+      - copy-quality
+      - terminology-clarity
+      - content-internal-consistency
+      - product-value-clarity
+  - id: transaction-decision
+    check_specs:
+      - cta-clarity
+      - pricing-transparency
+      - commitment-risk-timing

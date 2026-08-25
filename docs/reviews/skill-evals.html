@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>MetaPQP · 首批 Skill 评审</title>
+  <style>
+    :root { --ink:#172033; --navy:#173b63; --cyan:#087f8c; --line:#d7dde7; --wash:#f3f6fa; --paper:#fff; --muted:#667085; }
+    * { box-sizing:border-box; }
+    body { margin:0; color:var(--ink); background:var(--wash); font-family:"PingFang SC","Microsoft YaHei",sans-serif; line-height:1.55; }
+    header { padding:34px max(24px,calc((100vw - 1100px)/2)); color:#fff; background:var(--navy); }
+    header small { color:#9de0e4; font:700 12px ui-monospace,monospace; letter-spacing:.12em; }
+    h1 { margin:6px 0 4px; font-size:34px; }
+    header p { margin:0; color:#cbd8e6; }
+    main { max-width:1100px; margin:auto; padding:24px; }
+    .notice { padding:14px 16px; margin-bottom:20px; background:#e7f2f4; border-left:5px solid var(--cyan); }
+    section { margin:18px 0; padding:20px; background:var(--paper); border:1px solid var(--line); border-radius:10px; }
+    h2 { margin:0 0 4px; font-size:22px; }
+    .desc { margin:0 0 18px; color:var(--muted); }
+    article { margin:12px 0; padding:14px 16px; border:1px solid var(--line); border-left:4px solid var(--cyan); }
+    article strong { display:block; margin-bottom:5px; }
+    dl { display:grid; grid-template-columns:90px 1fr; gap:5px 12px; margin:10px 0 0; font-size:14px; }
+    dt { color:var(--muted); } dd { margin:0; }
+    code { font-family:ui-monospace,SFMono-Regular,monospace; color:var(--navy); }
+  </style>
+</head>
+<body>
+  <header><small>MODEL-INVOKED CAPABILITY REVIEW</small><h1>首批 Skill 与评测样例</h1><p>用于人工确认边界、证据要求和预期状态；不是 Golden Set。</p></header>
+  <main>
+    <div class="notice">本页对应 <code>skills/*/SKILL.md</code> 与 <code>skills/*/evals/evals.json</code>。首批线上结果经运营标注后，再扩充为 Golden Set。</div>
+    <section>
+      <h2>product-value · v1.0.0</h2>
+      <p class="desc">判断产品页是否清晰表达目标用户、问题、价值和差异点；不评价视觉样式，不补造产品事实。</p>
+      <article><strong>01 · 缺失价值说明</strong><div>Hero 只有 “Build the future” 和价格，没有目标用户或问题。</div><dl><dt>预期</dt><dd>fail；明确指出 audience/problem 缺失，且不虚构产品信息。</dd><dt>重点复核</dt><dd>是否有充分证据达到 fail，而不是 needs_verification。</dd></dl></article>
+      <article><strong>02 · 信息完整</strong><div>页面明确开发者受众、API 任务和三项可衡量收益。</div><dl><dt>预期</dt><dd>pass；理由绑定页面实际声明。</dd><dt>重点复核</dt><dd>是否避免把营销偏好当成问题。</dd></dl></article>
+    </section>
+    <section>
+      <h2>cta-clarity · v1.0.0</h2>
+      <p class="desc">判断 CTA 的动作、对象和预期去向是否一致；没有下一页证据时不猜测。</p>
+      <article><strong>01 · CTA 与目标一致</strong><div>Token Plan Standard 卡片中的“立即订阅”，目标是 Standard 购买页。</div><dl><dt>预期</dt><dd>pass；动作、卡片上下文、目标页一致。</dd><dt>重点复核</dt><dd>是否正确使用周边标题补足 CTA 对象。</dd></dl></article>
+      <article><strong>02 · 证据不足</strong><div>CTA 只有“继续”，没有周边标签，也没有目标页快照。</div><dl><dt>预期</dt><dd>needs_verification；不得虚构点击去向。</dd><dt>重点复核</dt><dd>是否把“含糊”与“错误跳转”分开。</dd></dl></article>
+    </section>
+  </main>
+</body>
+</html>
