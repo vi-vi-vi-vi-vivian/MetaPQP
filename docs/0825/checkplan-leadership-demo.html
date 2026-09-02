@@ -1,0 +1,1085 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>从页面 URL 到三类 CheckPlan</title>
+  <style>
+    :root {
+      --ink: #17203a;
+      --muted: #68748a;
+      --paper: #f6f8fb;
+      --white: #ffffff;
+      --line: #aeb9ca;
+      --context: #1e7180;
+      --context-soft: #e8f4f5;
+      --config: #52689b;
+      --config-soft: #edf0f8;
+      --decision: #d76728;
+      --decision-soft: #fff0e7;
+      --result: #21734d;
+      --result-soft: #e9f5ee;
+      --shadow: 8px 8px 0 rgba(23, 32, 58, 0.06);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--paper);
+      color: var(--ink);
+      font-family: "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+    }
+
+    .page {
+      width: min(1460px, calc(100% - 48px));
+      margin: 0 auto;
+      padding: 46px 0 56px;
+    }
+
+    .hero {
+      display: flex;
+      justify-content: space-between;
+      gap: 40px;
+      align-items: end;
+      margin-bottom: 28px;
+    }
+
+    .eyebrow,
+    .mono {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+
+    .eyebrow {
+      margin: 0 0 10px;
+      color: var(--context);
+      font-size: 12px;
+      font-weight: 750;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(38px, 4.7vw, 66px);
+      font-weight: 800;
+      letter-spacing: -.055em;
+      line-height: 1.05;
+    }
+
+    .thesis {
+      max-width: 500px;
+      margin: 0;
+      padding-left: 20px;
+      border-left: 3px solid var(--decision);
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.75;
+    }
+
+    .thesis strong { color: var(--ink); }
+
+    .source-strip {
+      display: grid;
+      grid-template-columns: 1.25fr 34px 1fr 34px 1.25fr;
+      gap: 12px;
+      align-items: stretch;
+      margin-bottom: 18px;
+      padding: 16px;
+      border: 1px solid #dbe2ec;
+      border-radius: 16px;
+      background: var(--white);
+    }
+
+    .source-card {
+      display: flex;
+      justify-content: space-between;
+      gap: 20px;
+      align-items: center;
+      min-height: 66px;
+      padding: 12px 15px;
+      border-radius: 10px;
+      background: var(--context-soft);
+    }
+
+    .source-card:nth-of-type(3) { background: #eef3f8; }
+    .source-card:nth-of-type(5) { background: var(--config-soft); }
+
+    .source-label {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    .source-value {
+      margin-top: 4px;
+      font-size: 13px;
+      font-weight: 650;
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+    }
+
+    .surface-field {
+      display: inline-block;
+      margin-top: 6px;
+      padding: 3px 7px;
+      border: 1px solid rgba(30, 113, 128, .28);
+      border-radius: 4px;
+      color: var(--context);
+      font-size: 10px;
+    }
+
+    .source-arrow {
+      display: grid;
+      place-items: center;
+      color: var(--line);
+      font-size: 25px;
+    }
+
+    .diagram-card {
+      overflow: hidden;
+      border: 1px solid #dbe2ec;
+      border-radius: 18px;
+      background: var(--white);
+      box-shadow: 0 18px 45px rgba(23, 32, 58, .07);
+    }
+
+    /* The Page detail is represented inside the unified three-scope diagram below. */
+    .legacy-page-detail { display: none; }
+
+    .diagram-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 24px;
+      align-items: center;
+      padding: 20px 24px 14px;
+      border-bottom: 1px solid #e6ebf2;
+    }
+
+    .diagram-head h2 {
+      margin: 0;
+      font-size: 19px;
+      letter-spacing: -.02em;
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 15px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .legend span::before {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      margin-right: 6px;
+      border-radius: 2px;
+      background: var(--dot);
+      content: "";
+    }
+
+    .diagram-scroll {
+      overflow-x: auto;
+      padding: 8px 18px 4px;
+    }
+
+    .diagram {
+      display: block;
+      width: 100%;
+      min-width: 1120px;
+      height: auto;
+    }
+
+    .diagram .node {
+      stroke-width: 2;
+      rx: 7;
+      filter: url(#nodeShadow);
+    }
+
+    .diagram .input-node { fill: var(--context-soft); stroke: var(--context); }
+    .diagram .config-node { fill: var(--config-soft); stroke: var(--config); }
+    .diagram .builder-node { fill: var(--decision-soft); stroke: var(--decision); stroke-width: 3; }
+    .diagram .decision-node { fill: #fff8f3; stroke: var(--decision); }
+    .diagram .checker-node { fill: #eef5fb; stroke: #39739c; }
+    .diagram .skill-node { fill: var(--config-soft); stroke: var(--config); }
+    .diagram .result-node { fill: var(--result-soft); stroke: var(--result); stroke-width: 3; }
+
+    .diagram .edge {
+      fill: none;
+      stroke: #738096;
+      stroke-width: 2.2;
+      marker-end: url(#arrow);
+    }
+
+    .diagram .edge.config { stroke: var(--config); }
+    .diagram .edge.output { stroke: var(--decision); stroke-width: 2.6; }
+    .diagram .edge.final { stroke: var(--result); stroke-width: 2.8; }
+    .diagram .edge.reference { stroke-dasharray: 6 6; marker-end: url(#arrowConfig); }
+
+    .diagram text {
+      fill: var(--ink);
+      font-family: "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+      text-anchor: middle;
+    }
+
+    .diagram .title { font-size: 16px; font-weight: 750; }
+    .diagram .value {
+      fill: #526079;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 11px;
+    }
+
+    .diagram .builder-title { font-size: 21px; font-weight: 800; }
+    .diagram .builder-sub { fill: #9d4b1d; font-size: 11px; font-weight: 650; }
+    .diagram .edge-label { fill: var(--muted); font-size: 10px; }
+
+    .example-plan {
+      display: grid;
+      grid-template-columns: .8fr 1.25fr 1fr;
+      gap: 0;
+      border-top: 1px solid #e6ebf2;
+    }
+
+    .plan-block {
+      min-height: 162px;
+      padding: 22px 24px;
+      border-right: 1px solid #e6ebf2;
+    }
+
+    .plan-block:last-child { border-right: 0; }
+
+    .plan-kicker {
+      margin: 0 0 12px;
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 750;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+    }
+
+    .totals {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .totals strong {
+      color: var(--result);
+      font-size: 40px;
+      letter-spacing: -.05em;
+    }
+
+    .totals span { color: var(--muted); font-size: 13px; }
+
+    .plan-meta { color: var(--muted); font-size: 11px; line-height: 1.7; }
+
+    .decision-list,
+    .batch-list {
+      display: grid;
+      gap: 7px;
+    }
+
+    .decision-row,
+    .batch-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 7px 9px;
+      border-radius: 6px;
+      background: #f5f7fa;
+      font-size: 11px;
+    }
+
+    .decision-row code,
+    .batch-row code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .decision-row span,
+    .batch-row span { color: var(--muted); text-align: right; }
+    .yes { border-left: 3px solid var(--result); }
+    .no { border-left: 3px solid var(--decision); }
+    .batch-row { border-left: 3px solid var(--config); }
+
+    .footnote {
+      margin: 16px 2px 0;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.65;
+    }
+
+    .scope-section {
+      margin-top: 20px;
+      overflow: hidden;
+      border: 1px solid #dbe2ec;
+      border-radius: 18px;
+      background: var(--white);
+      box-shadow: 0 18px 45px rgba(23, 32, 58, .07);
+    }
+
+    .scope-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 24px;
+      align-items: end;
+      padding: 24px 26px 18px;
+      border-bottom: 1px solid #e6ebf2;
+    }
+
+    .scope-head h2 { margin: 0; font-size: 22px; letter-spacing: -.03em; }
+    .scope-head p { max-width: 520px; margin: 0; color: var(--muted); font-size: 13px; line-height: 1.65; }
+
+    .scope-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+      padding: 20px 24px 24px;
+    }
+
+    .scope-card {
+      min-height: 260px;
+      padding: 18px;
+      border: 1px solid #dfe5ee;
+      border-top: 4px solid var(--scope-color);
+      border-radius: 10px;
+      background: #fbfcfe;
+    }
+
+    .scope-card.page-scope { --scope-color: var(--context); }
+    .scope-card.transition-scope { --scope-color: var(--decision); }
+    .scope-card.journey-scope { --scope-color: var(--result); }
+
+    .scope-tag {
+      display: inline-block;
+      margin-bottom: 12px;
+      padding: 4px 8px;
+      border-radius: 4px;
+      background: color-mix(in srgb, var(--scope-color) 12%, white);
+      color: var(--scope-color);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    .scope-card h3 { margin: 0 0 8px; font-size: 18px; letter-spacing: -.02em; }
+    .scope-card p { margin: 0 0 14px; color: var(--muted); font-size: 12px; line-height: 1.65; }
+    .scope-card ul { display: grid; gap: 7px; margin: 0; padding-left: 17px; color: #526079; font-size: 11px; line-height: 1.5; }
+    .scope-card li::marker { color: var(--scope-color); }
+
+    .scope-code {
+      margin-top: 15px;
+      padding: 9px 10px;
+      border-radius: 6px;
+      background: #eef2f7;
+      color: var(--ink);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 10px;
+      line-height: 1.55;
+      white-space: pre-line;
+    }
+
+    .scope-flow {
+      display: grid;
+      grid-template-columns: 1fr 42px 1fr 42px 1fr;
+      gap: 10px;
+      align-items: center;
+      margin: 0 24px 24px;
+      padding: 14px;
+      border-radius: 9px;
+      background: #f3f6fa;
+    }
+
+    .scope-flow-item { padding: 11px; border-left: 3px solid var(--scope-color); background: var(--white); }
+    .scope-flow-item.page-scope { --scope-color: var(--context); }
+    .scope-flow-item.transition-scope { --scope-color: var(--decision); }
+    .scope-flow-item.journey-scope { --scope-color: var(--result); }
+    .scope-flow-item strong { display: block; font-size: 12px; }
+    .scope-flow-item span { display: block; margin-top: 3px; color: var(--muted); font-size: 10px; line-height: 1.45; }
+    .scope-flow-arrow { color: var(--line); font-size: 22px; text-align: center; }
+
+    .builder-architecture { padding: 26px; border-bottom: 1px solid #e6ebf2; background: #f8fafc; }
+    .legacy-builder-map { display: none; }
+    .map-kicker { margin: 0 0 14px; color: #66758c; font: 750 10px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; letter-spacing: .12em; text-transform: uppercase; }
+    .primary-lane, .cross-lane { background: #fff; border: 1px solid #dce4ee; border-radius: 12px; }
+    .primary-lane { border-top: 4px solid var(--decision); padding: 18px; }
+    .lane-heading { display: flex; align-items: baseline; gap: 11px; margin-bottom: 16px; }
+    .lane-number { color: var(--decision); font: 800 10px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; letter-spacing: .1em; }
+    .lane-heading h3 { margin: 0; color: var(--ink); font-size: 16px; letter-spacing: -.02em; }
+    .lane-heading p { margin: 0 0 0 auto; color: var(--muted); font-size: 11px; }
+    .flow-row { display: grid; grid-template-columns: 1.45fr 1fr 1.1fr 1fr; align-items: stretch; gap: 30px; }
+    .flow-node { position: relative; min-height: 122px; padding: 15px 16px; border: 1px solid #dce4ee; border-radius: 8px; }
+    .flow-node:not(:last-child)::after, .execution-node:not(:last-child)::after, .compact-node:not(:last-child)::after { content: "→"; position: absolute; top: 50%; right: -25px; color: #8b99ad; font: 400 22px/1 sans-serif; transform: translateY(-50%); }
+    .context-node { background: var(--context-soft); border-color: var(--context); }
+    .config-node { background: #eef0fb; border-color: #8a96c2; }
+    .compile-node { background: var(--decision-soft); border: 2px solid var(--decision); }
+    .result-node { background: var(--result-soft); border-color: var(--result); }
+    .node-eyebrow { display: block; margin-bottom: 8px; color: #6e7c90; font: 750 9px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; letter-spacing: .08em; text-transform: uppercase; }
+    .node-title { display: block; margin-bottom: 7px; color: var(--ink); font-size: 13px; font-weight: 800; }
+    .node-detail { color: var(--muted); font: 10px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .context-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 9px; }
+    .context-chips span { padding: 3px 5px; background: rgba(255,255,255,.72); border: 1px solid rgba(45, 140, 158, .18); border-radius: 3px; color: #327c8c; font: 700 9px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .config-list { display: grid; gap: 7px; }
+    .config-list b { display: block; color: #505f96; font-size: 11px; }
+    .config-list span { color: var(--muted); font: 9px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .execution-row { display: grid; grid-template-columns: 1fr 1fr 1fr 1.25fr; gap: 30px; margin-top: 18px; padding-top: 18px; border-top: 1px dashed #cbd5e1; }
+    .execution-node { position: relative; min-height: 72px; padding: 13px 15px; border-left: 3px solid var(--context); background: #f7fafc; }
+    .execution-node.model { border-left-color: #6174b3; }
+    .execution-node.batch { border-left-color: var(--decision); }
+    .execution-node.final { border-left-color: var(--result); background: #edf8f1; }
+    .execution-node .node-title { margin-bottom: 4px; }
+    .cross-label { margin: 24px 0 10px; color: #66758c; font: 750 10px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; letter-spacing: .12em; text-transform: uppercase; }
+    .cross-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .cross-lane { padding: 15px; }
+    .cross-lane.transition { border-top: 3px solid #e47432; }
+    .cross-lane.journey { border-top: 3px solid var(--result); }
+    .compact-heading { display: flex; align-items: baseline; gap: 8px; margin-bottom: 12px; }
+    .compact-heading h3 { margin: 0; font-size: 13px; }
+    .compact-heading span { color: var(--muted); font: 9px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .compact-flow { display: grid; grid-template-columns: 1.15fr 1.15fr 1fr; gap: 25px; }
+    .compact-node { position: relative; min-height: 64px; padding: 11px; border: 1px solid #dce4ee; border-radius: 6px; }
+    .compact-node .node-title { margin-bottom: 4px; font-size: 11px; }
+    .compact-node .node-detail { font-size: 9px; }
+
+    .jiuwen {
+      margin-top: 20px;
+      overflow: hidden;
+      border-radius: 18px;
+      background: var(--ink);
+      color: var(--white);
+      box-shadow: 0 18px 45px rgba(23, 32, 58, .12);
+    }
+
+    .jiuwen-head {
+      display: grid;
+      grid-template-columns: .8fr 1.2fr;
+      gap: 28px;
+      align-items: end;
+      padding: 26px 28px 22px;
+      border-bottom: 1px solid rgba(255, 255, 255, .13);
+    }
+
+    .jiuwen-kicker {
+      margin: 0 0 8px;
+      color: #94d7de;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 11px;
+      font-weight: 750;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+    }
+
+    .jiuwen h2 {
+      margin: 0;
+      font-size: 27px;
+      letter-spacing: -.035em;
+    }
+
+    .jiuwen-summary {
+      margin: 0;
+      color: #b8c3d5;
+      font-size: 14px;
+      line-height: 1.75;
+    }
+
+    .jiuwen-summary strong { color: var(--white); }
+
+    .workflow-lane {
+      overflow-x: auto;
+      padding: 25px 28px 18px;
+    }
+
+    .orchestration-band {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 18px;
+      align-items: center;
+      min-width: 900px;
+      margin-bottom: 16px;
+      padding: 12px 16px;
+      border: 1px solid rgba(148, 215, 222, .36);
+      border-radius: 8px;
+      background: rgba(30, 113, 128, .16);
+      color: #cdecef;
+      font-size: 11px;
+    }
+
+    .orchestration-band strong { color: var(--white); }
+    .orchestration-services { text-align: center; }
+
+    .workflow-track {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(130px, 1fr));
+      gap: 16px;
+      min-width: 900px;
+    }
+
+    .business-label {
+      min-width: 900px;
+      margin: 0 0 9px;
+      color: #95a4ba;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    .workflow-node {
+      position: relative;
+      padding: 13px 10px;
+      border: 1px solid rgba(255, 255, 255, .2);
+      border-radius: 7px;
+      background: rgba(255, 255, 255, .06);
+      text-align: center;
+    }
+
+    .workflow-node:not(:last-child)::after {
+      position: absolute;
+      top: 50%;
+      right: -17px;
+      width: 17px;
+      height: 1px;
+      background: #718099;
+      content: "";
+    }
+
+    .workflow-node:not(:last-child)::before {
+      position: absolute;
+      z-index: 1;
+      top: calc(50% - 3px);
+      right: -17px;
+      border-top: 4px solid transparent;
+      border-bottom: 4px solid transparent;
+      border-left: 6px solid #718099;
+      content: "";
+    }
+
+    .workflow-node.emphasis {
+      border-color: #f0a276;
+      background: rgba(215, 103, 40, .18);
+    }
+
+    .workflow-name {
+      display: block;
+      font-size: 12px;
+      font-weight: 750;
+    }
+
+    .workflow-value {
+      display: block;
+      margin-top: 4px;
+      color: #95a4ba;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 9px;
+    }
+
+    .jiuwen-capabilities {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      border-top: 1px solid rgba(255, 255, 255, .13);
+    }
+
+    .capability {
+      min-height: 125px;
+      padding: 21px 24px;
+      border-right: 1px solid rgba(255, 255, 255, .13);
+    }
+
+    .capability:last-child { border-right: 0; }
+    .capability-title { margin: 0 0 8px; color: #94d7de; font-size: 12px; font-weight: 750; }
+    .capability p { margin: 0; color: #b8c3d5; font-size: 12px; line-height: 1.65; }
+
+    .jiuwen-boundary {
+      display: flex;
+      justify-content: space-between;
+      gap: 20px;
+      padding: 14px 24px;
+      background: rgba(255, 255, 255, .055);
+      color: #aebbd0;
+      font-size: 11px;
+      line-height: 1.6;
+    }
+
+    .jiuwen-boundary strong { color: var(--white); }
+
+    @media (max-width: 850px) {
+      .hero { align-items: start; flex-direction: column; }
+      .source-strip { grid-template-columns: 1fr; }
+      .source-arrow { transform: rotate(90deg); height: 18px; }
+      .example-plan { grid-template-columns: 1fr; }
+      .plan-block { border-right: 0; border-bottom: 1px solid #e6ebf2; }
+      .plan-block:last-child { border-bottom: 0; }
+      .scope-head { align-items: flex-start; flex-direction: column; }
+      .scope-grid { grid-template-columns: 1fr; }
+      .scope-flow { grid-template-columns: 1fr; }
+      .scope-flow-arrow { transform: rotate(90deg); height: 18px; }
+      .flow-row, .execution-row, .compact-flow { grid-template-columns: 1fr; gap: 14px; }
+      .flow-node:not(:last-child)::after, .execution-node:not(:last-child)::after, .compact-node:not(:last-child)::after { top: auto; right: auto; bottom: -18px; left: 50%; transform: translateX(-50%) rotate(90deg); }
+      .cross-grid { grid-template-columns: 1fr; }
+      .lane-heading { align-items: flex-start; flex-direction: column; gap: 6px; }
+      .lane-heading p { margin: 0; }
+      .jiuwen-head { grid-template-columns: 1fr; align-items: start; }
+      .jiuwen-capabilities { grid-template-columns: 1fr; }
+      .capability { border-right: 0; border-bottom: 1px solid rgba(255, 255, 255, .13); }
+      .capability:last-child { border-bottom: 0; }
+      .jiuwen-boundary { flex-direction: column; gap: 6px; }
+    }
+
+    @media (max-width: 560px) {
+      .page { width: calc(100% - 24px); padding-top: 28px; }
+      h1 { font-size: 39px; }
+      .diagram-head { align-items: flex-start; flex-direction: column; padding: 18px; }
+      .diagram-scroll { padding-inline: 10px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="hero">
+      <div>
+        <p class="eyebrow">MetaPQP · CheckPlan compilation</p>
+        <h1>从页面 URL 到三类 CheckPlan</h1>
+      </div>
+      <p class="thesis">
+        系统先识别页面触点并采集事实，再由<strong>三个职责清晰的 Builder</strong>分别编译页面、跳转和短旅程检查计划。规则选择可解释、可复现，不由模型临场决定。
+      </p>
+    </header>
+
+    <section class="source-strip" aria-label="从 URL 到页面上下文">
+      <div class="source-card">
+        <div>
+          <div class="source-label">输入 URL</div>
+          <div class="source-value mono">…/agentorchard/tokenplan.html</div>
+          <span class="surface-field mono">page_surface = portal</span>
+        </div>
+      </div>
+      <div class="source-arrow" aria-hidden="true">→</div>
+      <div class="source-card">
+        <div>
+          <div class="source-label">展开运行</div>
+          <div class="source-value">Desktop · zh-CN<br>Mobile · zh-CN</div>
+        </div>
+      </div>
+      <div class="source-arrow" aria-hidden="true">→</div>
+      <div class="source-card">
+        <div>
+          <div class="source-label">浏览器采集与识别</div>
+          <div class="source-value">PageMapNode → PageSnapshot → PageContext</div>
+        </div>
+        <span class="mono">facts</span>
+      </div>
+    </section>
+
+    <section class="diagram-card legacy-page-detail" aria-labelledby="diagram-title">
+      <div class="diagram-head">
+        <h2 id="diagram-title">Page CheckPlan Builder：单页计划细节</h2>
+        <div class="legend" aria-label="图例">
+          <span style="--dot: var(--context)">本次页面上下文</span>
+          <span style="--dot: var(--config)">版本化配置</span>
+          <span style="--dot: var(--decision)">编译决策</span>
+          <span style="--dot: var(--result)">Page 计划</span>
+        </div>
+      </div>
+
+      <div class="diagram-scroll">
+        <svg class="diagram" viewBox="0 0 1400 820" role="img" aria-labelledby="svg-title svg-desc">
+          <title id="svg-title">CheckPlan 构建关系图</title>
+          <desc id="svg-desc">PageMapNode提供预期页面身份，页面采集生成PageContext；设备、语言、页面阶段、页面形态、业务特征、审计Profile和规则注册表共同输入Page CheckPlan Builder，筛选scope为page的规则并生成页面执行计划。</desc>
+          <defs>
+            <filter id="nodeShadow" x="-10%" y="-10%" width="130%" height="140%">
+              <feDropShadow dx="5" dy="6" stdDeviation="0" flood-color="#17203a" flood-opacity=".06"/>
+            </filter>
+            <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L8,4 L0,8 Z" fill="#738096"/>
+            </marker>
+            <marker id="arrowConfig" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L8,4 L0,8 Z" fill="#52689b"/>
+            </marker>
+          </defs>
+
+          <!-- Inputs -->
+          <rect class="node input-node" x="28" y="34" width="180" height="82"/>
+          <text class="title" x="118" y="66">Device</text>
+          <text class="value" x="118" y="92">desktop</text>
+
+          <rect class="node input-node" x="250" y="34" width="180" height="82"/>
+          <text class="title" x="340" y="66">Locale</text>
+          <text class="value" x="340" y="92">zh-CN</text>
+
+          <rect class="node input-node" x="472" y="34" width="200" height="82"/>
+          <text class="title" x="572" y="66">Journey Stage</text>
+          <text class="value" x="572" y="92">awareness</text>
+
+          <rect class="node input-node" x="714" y="34" width="210" height="82"/>
+          <text class="title" x="819" y="66">Page Archetype</text>
+          <text class="value" x="819" y="92">product_landing</text>
+
+          <rect class="node input-node" x="966" y="34" width="220" height="82"/>
+          <text class="title" x="1076" y="66">Business Features</text>
+          <text class="value" x="1076" y="92">pricing · purchase_entry</text>
+
+          <rect class="node config-node" x="1228" y="34" width="150" height="82"/>
+          <text class="title" x="1303" y="66">AuditProfile</text>
+          <text class="value" x="1303" y="92">mvp · 28 specs</text>
+
+          <!-- Input edges into builder -->
+          <path class="edge" d="M118 116 V154 Q118 174 138 180 L542 254"/>
+          <path class="edge" d="M340 116 V154 Q340 174 358 183 L578 254"/>
+          <path class="edge" d="M572 116 V165 Q572 187 594 203 L622 254"/>
+          <path class="edge" d="M819 116 V165 Q819 187 797 203 L752 254"/>
+          <path class="edge" d="M1076 116 V154 Q1076 174 1057 181 L790 254"/>
+          <path class="edge config" d="M1303 116 V154 Q1303 174 1283 181 L816 254"/>
+
+          <!-- Registry and standard validation -->
+          <rect class="node config-node" x="1000" y="214" width="250" height="88"/>
+          <text class="title" x="1125" y="248">CheckSpec Registry</text>
+          <text class="value" x="1125" y="275">version · applies_when · executor</text>
+
+          <rect class="node config-node" x="1248" y="342" width="130" height="72"/>
+          <text class="title" x="1313" y="370">Standards</text>
+          <text class="value" x="1313" y="392">refs</text>
+
+          <path class="edge config" d="M1000 258 H835"/>
+          <path class="edge config reference" d="M1313 342 V320 Q1313 302 1295 290 L1250 270"/>
+          <text class="edge-label" x="1306" y="317">启动时校验引用</text>
+
+          <!-- Builder -->
+          <rect class="node builder-node" x="520" y="254" width="315" height="105"/>
+          <text class="builder-title" x="677" y="296">CheckPlan Builder</text>
+          <text class="builder-sub" x="677" y="326">仅筛选 scope = page 的规则</text>
+
+          <!-- Outputs -->
+          <path class="edge output" d="M677 359 V408"/>
+          <rect class="node decision-node" x="502" y="408" width="350" height="82"/>
+          <text class="title" x="677" y="440">Applicable CheckSpecs</text>
+          <text class="value" x="677" y="466">selected / skipped · 保存原因</text>
+
+          <path class="edge output" d="M620 490 V514 Q620 530 604 536 L490 558"/>
+          <path class="edge output" d="M734 490 V514 Q734 530 750 536 L864 558"/>
+
+          <rect class="node checker-node" x="340" y="558" width="300" height="82"/>
+          <text class="title" x="490" y="590">Python Checkers</text>
+          <text class="value" x="490" y="616">deterministic · selected 5 / 7</text>
+
+          <rect class="node skill-node" x="714" y="558" width="300" height="82"/>
+          <text class="title" x="864" y="590">Model Check Skills</text>
+          <text class="value" x="864" y="616">SKILL.md · selected 6 / 10</text>
+
+          <path class="edge output" d="M490 640 V658 Q490 674 506 680 L620 702"/>
+          <path class="edge output" d="M864 640 V658 Q864 674 848 680 L734 702"/>
+          <rect class="node decision-node" x="502" y="702" width="350" height="72"/>
+          <text class="title" x="677" y="730">Execution Batches</text>
+          <text class="value" x="677" y="754">local · content · transaction</text>
+
+          <path class="edge final" d="M677 774 V784"/>
+          <rect class="node result-node" x="532" y="784" width="290" height="30"/>
+          <text class="title" x="677" y="806">Page CheckPlan · builder 1.2.0</text>
+        </svg>
+      </div>
+
+      <div class="example-plan" aria-label="CheckPlan 示例摘要">
+        <section class="plan-block">
+          <p class="plan-kicker">Example output</p>
+          <div class="totals"><strong>17</strong><span>条 Page 候选规则</span></div>
+          <div class="plan-meta mono">builder 1.2.0<br>profile mvp · grouped<br>按页面 Context 决定 selected</div>
+        </section>
+
+        <section class="plan-block">
+          <p class="plan-kicker">为什么选 / 为什么跳过</p>
+          <div class="decision-list">
+            <div class="decision-row yes"><code>page-load</code><span>global rule</span></div>
+            <div class="decision-row yes"><code>product-value-clarity</code><span>product_landing</span></div>
+            <div class="decision-row yes"><code>pricing-transparency</code><span>pricing</span></div>
+            <div class="decision-row no"><code>mobile-horizontal-overflow</code><span>当前为 desktop</span></div>
+            <div class="decision-row no"><code>commitment-risk-timing</code><span>当前为 awareness</span></div>
+          </div>
+        </section>
+
+        <section class="plan-block">
+          <p class="plan-kicker">怎么执行</p>
+          <div class="batch-list">
+            <div class="batch-row"><code>local</code><span>5 项 Python Checker</span></div>
+            <div class="batch-row"><code>content-understanding</code><span>4 项 Model Skill</span></div>
+            <div class="batch-row"><code>transaction-decision</code><span>2 项 Model Skill</span></div>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <section class="scope-section" aria-labelledby="scope-title">
+      <div class="scope-head">
+          <div>
+          <p class="eyebrow">Three scopes · one registry</p>
+          <h2 id="scope-title">Page 单页细节 × 三类 Builder：合并架构图</h2>
+        </div>
+        <p>一张图保留 Page Builder 的完整编译细节，同时展示 Transition / Journey Builder 的输入、规则分流和独立计划输出。</p>
+      </div>
+
+      <div class="builder-architecture" aria-label="三个 CheckPlan Builder 并行架构图">
+        <svg class="legacy-builder-map" viewBox="0 0 1400 900" role="img" aria-labelledby="builder-arch-title builder-arch-desc">
+          <title id="builder-arch-title">Page、Transition、Journey 三个 CheckPlan Builder</title>
+          <desc id="builder-arch-desc">一张图同时展示Page CheckPlan Builder的单页计划细节，以及Transition和Journey两个Builder的统一入口、规则筛选和计划输出。</desc>
+          <defs>
+            <marker id="archArrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L8,4 L0,8 Z" fill="#9aa6b8"/>
+            </marker>
+          </defs>
+
+          <text class="arch-label" x="180" y="18">输入与配置</text>
+          <text class="arch-label" x="750" y="18">三个 Plan Builder</text>
+          <text class="arch-label" x="1220" y="18">输出计划</text>
+
+          <!-- Shared page context inputs: the complete detail from the Page diagram -->
+          <rect class="arch-node arch-input" x="24" y="38" width="340" height="174"/>
+          <text class="arch-title" x="194" y="62">PageSnapshot + PageContext</text>
+          <text class="arch-value" x="194" y="84">Device = desktop · Locale = zh-CN</text>
+          <text class="arch-value" x="194" y="104">Stage = awareness · Archetype = product_landing</text>
+          <text class="arch-value" x="194" y="124">Features = pricing · purchase_entry</text>
+          <text class="arch-value" x="194" y="144">PageSurface = portal · facts from browser</text>
+          <text class="arch-value" x="194" y="174">URL → PageMapNode → Snapshot → Context</text>
+
+          <rect class="arch-node arch-input" x="390" y="38" width="170" height="72"/>
+          <text class="arch-title" x="475" y="62">AuditProfile</text>
+          <text class="arch-value" x="475" y="84">mvp · 28 specs</text>
+          <rect class="arch-node arch-input" x="390" y="124" width="170" height="72"/>
+          <text class="arch-title" x="475" y="148">CheckSpec Registry</text>
+          <text class="arch-value" x="475" y="170">scope · applies_when</text>
+          <rect class="arch-node arch-input" x="390" y="210" width="170" height="54"/>
+          <text class="arch-title" x="475" y="233">Standards</text>
+          <text class="arch-value" x="475" y="251">启动时校验引用</text>
+
+          <rect class="arch-node arch-builder" x="620" y="78" width="300" height="116"/>
+          <text class="arch-title" x="770" y="112">CheckPlanBuilder</text>
+          <text class="arch-value" x="770" y="136">scope = page · v1.2.0</text>
+          <text class="arch-value" x="770" y="157">匹配 device / locale / stage</text>
+          <text class="arch-value" x="770" y="176">archetype / features</text>
+
+          <rect class="arch-node arch-plan" x="1050" y="92" width="300" height="88"/>
+          <text class="arch-title" x="1200" y="122">Page CheckPlan</text>
+          <text class="arch-value" x="1200" y="145">selected / skipped · 保存原因</text>
+          <text class="arch-value" x="1200" y="164">17 page specs · 3 execution batches</text>
+
+          <!-- Transition and Journey lanes -->
+          <rect class="arch-node arch-input" x="24" y="316" width="340" height="68"/>
+          <text class="arch-title" x="194" y="341">TransitionTrace</text>
+          <text class="arch-value" x="194" y="365">起点快照 · ActionRecord · 终点快照</text>
+          <rect class="arch-node arch-builder" x="620" y="310" width="300" height="80"/>
+          <text class="arch-title" x="770" y="341">TransitionCheckPlanBuilder</text>
+          <text class="arch-value" x="770" y="365">scope = transition · v1.0.0</text>
+          <rect class="arch-node arch-plan" x="1050" y="316" width="300" height="68"/>
+          <text class="arch-title" x="1200" y="341">Transition CheckPlan</text>
+          <text class="arch-value" x="1200" y="365">3 specs · deterministic batch</text>
+
+          <rect class="arch-node arch-input" x="24" y="424" width="340" height="68"/>
+          <text class="arch-title" x="194" y="449">Journey Evidence</text>
+          <text class="arch-value" x="194" y="473">多节点事实 · comparison 关系</text>
+          <rect class="arch-node arch-builder" x="620" y="418" width="300" height="80"/>
+          <text class="arch-title" x="770" y="449">JourneyCheckPlanBuilder</text>
+          <text class="arch-value" x="770" y="473">scope = journey · v1.0.0</text>
+          <rect class="arch-node arch-plan" x="1050" y="424" width="300" height="68"/>
+          <text class="arch-title" x="1200" y="449">Journey CheckPlan</text>
+          <text class="arch-value" x="1200" y="473">8 specs · invocations + model batch</text>
+
+          <!-- Full Page plan detail -->
+          <path class="arch-edge" d="M194 212 V252 H770 V310"/>
+          <path class="arch-edge" d="M560 74 H620"/>
+          <path class="arch-edge" d="M560 160 H620"/>
+          <path class="arch-edge" d="M920 136 H1050"/>
+          <path class="arch-edge" d="M364 350 H620"/>
+          <path class="arch-edge" d="M920 350 H1050"/>
+          <path class="arch-edge" d="M364 458 H620"/>
+          <path class="arch-edge" d="M920 458 H1050"/>
+          <path class="arch-edge" d="M475 210 V194"/>
+
+          <rect class="arch-node arch-decision" x="450" y="548" width="640" height="68"/>
+          <text class="arch-title" x="770" y="576">Applicable CheckSpecs</text>
+          <text class="arch-value" x="770" y="598">scope = page · selected / skipped · 保存选择原因</text>
+          <path class="arch-edge" d="M770 194 V548"/>
+
+          <rect class="arch-node arch-input" x="160" y="672" width="300" height="72"/>
+          <text class="arch-title" x="310" y="699">Python Checkers</text>
+          <text class="arch-value" x="310" y="722">7 个候选 · 示例 selected 5</text>
+          <rect class="arch-node arch-input" x="480" y="672" width="300" height="72"/>
+          <text class="arch-title" x="630" y="699">Model Check Skills</text>
+          <text class="arch-value" x="630" y="722">10 个候选 · 示例 selected 6</text>
+          <rect class="arch-node arch-input" x="800" y="672" width="300" height="72"/>
+          <text class="arch-title" x="950" y="699">Execution Batches</text>
+          <text class="arch-value" x="950" y="722">local · content · transaction</text>
+          <path class="arch-edge" d="M650 616 V640 H310 V672"/>
+          <path class="arch-edge" d="M770 616 V672 H630"/>
+          <path class="arch-edge" d="M890 616 V640 H950 V672"/>
+          <rect class="arch-node arch-plan" x="430" y="790" width="680" height="70"/>
+          <text class="arch-title" x="770" y="819">Page CheckPlan · builder 1.2.0</text>
+          <text class="arch-value" x="770" y="842">17 page candidates → selected/skipped → execution batches</text>
+          <path class="arch-edge" d="M310 744 V770 H770 V790"/>
+          <path class="arch-edge" d="M630 744 V790"/>
+          <path class="arch-edge" d="M950 744 V770 H770 V790"/>
+        </svg>
+
+        <div class="map-kicker">同一规则注册表 · 按 scope 分流 · 三份独立 CheckPlan</div>
+        <section class="primary-lane" aria-label="Page CheckPlan Builder 的完整构建链">
+          <div class="lane-heading">
+            <span class="lane-number">01 / PRIMARY PATH</span>
+            <h3>Page CheckPlan Builder</h3>
+            <p>单页规则的完整选择与分批执行过程</p>
+          </div>
+          <div class="flow-row">
+            <div class="flow-node context-node">
+              <span class="node-eyebrow">Runtime facts</span>
+              <span class="node-title">PageSnapshot + PageContext</span>
+              <div class="node-detail">URL → PageMapNode → Snapshot → Context</div>
+              <div class="context-chips"><span>desktop</span><span>zh-CN</span><span>awareness</span><span>product_landing</span><span>pricing</span><span>purchase_entry</span><span>portal</span></div>
+            </div>
+            <div class="flow-node config-node">
+              <span class="node-eyebrow">Versioned config</span>
+              <div class="config-list"><div><b>AuditProfile</b><span>mvp · 28 specs</span></div><div><b>CheckSpec Registry</b><span>scope · applies_when · executor</span></div><div><b>Standards</b><span>启动时校验引用</span></div></div>
+            </div>
+            <div class="flow-node compile-node">
+              <span class="node-eyebrow">Deterministic compile</span>
+              <span class="node-title">CheckPlanBuilder</span>
+              <div class="node-detail">scope = page · v1.2.0<br>device / locale / stage<br>archetype / features</div>
+            </div>
+            <div class="flow-node result-node">
+              <span class="node-eyebrow">Selection result</span>
+              <span class="node-title">Applicable CheckSpecs</span>
+              <div class="node-detail">17 candidates<br>selected / skipped<br>保存选择原因</div>
+            </div>
+          </div>
+          <div class="execution-row">
+            <div class="execution-node"><span class="node-eyebrow">Local</span><span class="node-title">Python Checkers</span><div class="node-detail">7 candidates · example selected 5</div></div>
+            <div class="execution-node model"><span class="node-eyebrow">Semantic</span><span class="node-title">Model Check Skills</span><div class="node-detail">10 candidates · example selected 6</div></div>
+            <div class="execution-node batch"><span class="node-eyebrow">Grouped execution</span><span class="node-title">Execution Batches</span><div class="node-detail">local · content · transaction</div></div>
+            <div class="execution-node final"><span class="node-eyebrow">Plan output</span><span class="node-title">Page CheckPlan</span><div class="node-detail">builder 1.2.0 · selected/skipped · batches</div></div>
+          </div>
+        </section>
+
+        <p class="cross-label">02 / CROSS-PAGE PATHS</p>
+        <div class="cross-grid">
+          <section class="cross-lane transition" aria-label="Transition CheckPlan Builder">
+            <div class="compact-heading"><h3>Transition CheckPlan Builder</h3><span>scope = transition · v1.0.0</span></div>
+            <div class="compact-flow">
+              <div class="compact-node context-node"><span class="node-title">TransitionTrace</span><div class="node-detail">起点快照 · ActionRecord · 终点快照</div></div>
+              <div class="compact-node compile-node"><span class="node-title">按 transition_id 筛选</span><div class="node-detail">Profile + transition_ids</div></div>
+              <div class="compact-node result-node"><span class="node-title">Transition CheckPlan</span><div class="node-detail">3 specs · deterministic batch</div></div>
+            </div>
+          </section>
+          <section class="cross-lane journey" aria-label="Journey CheckPlan Builder">
+            <div class="compact-heading"><h3>Journey CheckPlan Builder</h3><span>scope = journey · v1.0.0</span></div>
+            <div class="compact-flow">
+              <div class="compact-node context-node"><span class="node-title">Journey Evidence</span><div class="node-detail">多节点事实 · comparison 关系</div></div>
+              <div class="compact-node compile-node"><span class="node-title">生成 CheckInvocation</span><div class="node-detail">journey_id · mode · min nodes</div></div>
+              <div class="compact-node result-node"><span class="node-title">Journey CheckPlan</span><div class="node-detail">8 specs · invocation + model batch</div></div>
+            </div>
+          </section>
+        </div>
+      </div>
+
+      <div class="scope-grid">
+        <article class="scope-card page-scope">
+          <span class="scope-tag">scope = page</span>
+          <h3>Page CheckPlan Builder</h3>
+          <p>检查一个页面。当前单页流水线已经稳定使用它。</p>
+          <ul>
+            <li>输入：PageContext + PageAuditRequest + mvp Profile</li>
+            <li>筛选：device、locale、stage、archetype、features</li>
+            <li>输出：selected / skipped、执行批次</li>
+          </ul>
+          <div class="scope-code">builder 1.2.0 · 17 page specs
+PageSnapshot → PageContext → Page CheckPlan</div>
+        </article>
+
+        <article class="scope-card transition-scope">
+          <span class="scope-tag">scope = transition</span>
+          <h3>Transition CheckPlan Builder</h3>
+          <p>检查一次受控跳转，不负责决定是否允许点击。</p>
+          <ul>
+            <li>输入：transition_id + mvp Profile</li>
+            <li>筛选：scope=transition、transition_ids、Profile</li>
+            <li>输出：跳转规则的本地执行批次</li>
+          </ul>
+          <div class="scope-code">builder 1.0.0 · 3 transition specs
+起点快照 + ActionRecord + 终点快照</div>
+        </article>
+
+        <article class="scope-card journey-scope">
+          <span class="scope-tag">scope = journey</span>
+          <h3>Journey CheckPlan Builder</h3>
+          <p>检查一段短旅程或跨页面证据，不执行页面动作。</p>
+          <ul>
+            <li>输入：JourneyDefinition + JourneyEvidenceBundle</li>
+            <li>筛选：journey_id、execution_mode、comparison、最少节点数</li>
+            <li>输出：CheckInvocation + 语义一致性模型批次</li>
+          </ul>
+          <div class="scope-code">builder 1.0.0 · 8 journey specs
+page facts → invocations → journey CheckPlan</div>
+        </article>
+      </div>
+
+      <div class="scope-flow" aria-label="三个 CheckPlan 的调用关系">
+        <div class="scope-flow-item page-scope"><strong>每个页面</strong><span>Page CheckPlan<br>page_results</span></div>
+        <div class="scope-flow-arrow" aria-hidden="true">→</div>
+        <div class="scope-flow-item transition-scope"><strong>每次跳转</strong><span>Transition CheckPlan<br>transition_check_runs</span></div>
+        <div class="scope-flow-arrow" aria-hidden="true">→</div>
+        <div class="scope-flow-item journey-scope"><strong>整段旅程</strong><span>Journey CheckPlan<br>journey_check_runs</span></div>
+      </div>
+    </section>
+
+    <section class="jiuwen" aria-labelledby="jiuwen-title">
+      <div class="jiuwen-head">
+        <div>
+          <p class="jiuwen-kicker">OpenJiuwen in MetaPQP</p>
+          <h2 id="jiuwen-title">流程编排底座，不是决策大脑</h2>
+        </div>
+        <p class="jiuwen-summary">
+          当前只有<strong>Page 审计</strong>接入了 OpenJiuwen Workflow；Transition / Journey 已由 MetaPQP 的应用层运行器执行，但还没有包装成 OpenJiuwen Workflow。
+        </p>
+      </div>
+
+      <div class="workflow-lane" aria-label="OpenJiuwen 工作流节点">
+        <div class="orchestration-band">
+          <span><strong>OpenJiuwen Start</strong></span>
+          <span class="orchestration-services">Workflow / Connection · IO State · Session · Timeout · Async Invoke · Logging</span>
+          <span><strong>OpenJiuwen End</strong></span>
+        </div>
+        <p class="business-label">当前 OpenJiuwen 调度的 Page MetaPQP 业务组件</p>
+        <div class="workflow-track">
+          <div class="workflow-node"><span class="workflow-name">Baseline</span><span class="workflow-value">collect snapshot</span></div>
+          <div class="workflow-node"><span class="workflow-name">Context</span><span class="workflow-value">resolve context</span></div>
+          <div class="workflow-node emphasis"><span class="workflow-name">Plan</span><span class="workflow-value">build CheckPlan</span></div>
+          <div class="workflow-node"><span class="workflow-name">Checks</span><span class="workflow-value">execute batches</span></div>
+          <div class="workflow-node"><span class="workflow-name">Assessment</span><span class="workflow-value">build findings</span></div>
+          <div class="workflow-node"><span class="workflow-name">Persist</span><span class="workflow-value">write outputs</span></div>
+        </div>
+      </div>
+
+      <div class="jiuwen-capabilities">
+        <article class="capability">
+          <h3 class="capability-title">Workflow / DAG</h3>
+          <p>用 Start、End、WorkflowComponent 和显式 Connection 固定节点顺序，避免流程由 Agent 自由规划。</p>
+        </article>
+        <article class="capability">
+          <h3 class="capability-title">IO State / Component</h3>
+          <p>每个业务步骤包装成自定义 Component，通过输入 Schema 把同一份状态安全传给下一节点。</p>
+        </article>
+        <article class="capability">
+          <h3 class="capability-title">Session / Runtime</h3>
+          <p>每个 Job 创建独立 Session，配置执行超时，通过异步 invoke 运行，并接入 OpenJiuwen 日志。</p>
+        </article>
+      </div>
+
+      <div class="jiuwen-boundary">
+        <span><strong>当前使用：</strong>Page Workflow 的确定性编排、状态传递、Session、超时与日志</span>
+        <span><strong>当前边界：</strong>Journey Runner 已接入业务层，但尚未包装成 OpenJiuwen Workflow</span>
+      </div>
+    </section>
+
+    <p class="footnote">
+      Page 示例使用 awareness / product_landing 的演示上下文；三个 Plan 的输入、选择和执行批次来自当前代码实现。PageMapNode 当前主要由 Journey Runner用于起点校验和节点串联，单独的 Page CLI仍以 URL、PageSnapshot和PageContext为主。实线表示运行时数据或配置输入；虚线表示规则引用或跨层关联。
+    </p>
+  </main>
+</body>
+</html>

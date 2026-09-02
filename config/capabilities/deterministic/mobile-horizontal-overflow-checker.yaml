@@ -1,0 +1,6 @@
+id: mobile-horizontal-overflow-checker
+version: 1.0.0
+kind: deterministic
+supported_scopes: [page]
+required_evidence: [mobile_layout]
+implementation: {entrypoint: "portal_audit.capabilities.checkers.page:MobileHorizontalOverflowChecker"}

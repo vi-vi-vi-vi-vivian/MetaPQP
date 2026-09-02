@@ -1,0 +1,9 @@
+id: tokenplan-awareness-purchase-preview
+version: 1.0.0
+title: TokenPlan 感知到购买预览
+goal: 验证用户能从感知页进入正确的 TokenPlan 购买入口，并在任何交易提交前停止。
+execution_mode: sequential
+start: tokenplan-awareness
+transitions:
+  - tokenplan-awareness-to-purchase
+safety_profile: production-readonly

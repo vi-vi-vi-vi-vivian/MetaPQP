@@ -23,9 +23,12 @@ class AssessmentBuilder:
     ) -> PageAssessment:
         findings = []
         for run in runs:
-            if run.status != CheckStatus.FAIL:
-                continue
             spec = self.registry.get(run.check_spec_id)
+            is_visual_pending = (
+                run.status == CheckStatus.NEEDS_VERIFICATION and "visual" in spec.tags
+            )
+            if run.status != CheckStatus.FAIL and not is_visual_pending:
+                continue
             findings.append(
                 Finding(
                     page_id=snapshot.page_id,
@@ -42,6 +45,7 @@ class AssessmentBuilder:
                     standard_refs=spec.standard_refs,
                     suggestion_after=run.suggestion or "",
                     journey_stage_refs=[context.primary_journey_stage],
+                    verification_status=("pending" if is_visual_pending else "verified"),
                 )
             )
         coverage = (

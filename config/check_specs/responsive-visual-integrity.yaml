@@ -1,0 +1,19 @@
+id: responsive-visual-integrity
+version: 1.0.0
+title: 移动端页面不应出现明显响应式破版
+description: 检查移动端页面是否出现影响理解或操作的明显错位、组件重叠、异常缩放和布局断裂；轻微视觉偏差不报告。
+tags: [mobile, portal, visual, responsive, layout]
+applies_when: {devices: [mobile], page_surfaces: [portal]}
+required_evidence: [visual_viewport, visual_overview, visual_tiles, mobile_layout, element_bounds]
+executor: {type: model_skill, capability_id: responsive-visual-integrity}
+default_severity: p1
+standard_refs:
+  - criterion_id: metapqp-internal/responsive-visual-integrity
+    relation: implements
+  - criterion_id: wcag-2.2/1.4.10
+    relation: partial_coverage
+    notes: 视觉检查补充固定移动端视口的 Reflow 证据，不代表完整 WCAG 2.2 合规。
+  - criterion_id: nielsen-heuristics/H4
+    relation: supports
+    notes: 明显破版会破坏页面组件和布局的一致性。
+

@@ -7,7 +7,7 @@ from enum import StrEnum
 from typing import Any
 from uuid import uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 def utc_now() -> datetime:
@@ -27,6 +27,7 @@ class Severity(StrEnum):
 class CheckStatus(StrEnum):
     PASS = "pass"
     FAIL = "fail"
+    NOT_APPLICABLE = "not_applicable"
     NEEDS_VERIFICATION = "needs_verification"
     ERROR = "error"
 
@@ -42,6 +43,18 @@ class ExecutorType(StrEnum):
     MODEL_SKILL = "model_skill"
 
 
+class CapabilityKind(StrEnum):
+    """The implementation family behind a CheckSpec capability."""
+
+    DETERMINISTIC = "deterministic"
+    SKILL = "skill"
+
+
+class SkillModality(StrEnum):
+    TEXT = "text"
+    VISION = "vision"
+
+
 class ModelExecutionMode(StrEnum):
     SINGLE = "single"
     GROUPED = "grouped"
@@ -53,10 +66,46 @@ class ExecutionBatchMode(StrEnum):
     MODEL_BATCH = "model_batch"
 
 
+class CheckScope(StrEnum):
+    PAGE = "page"
+    TRANSITION = "transition"
+    JOURNEY = "journey"
+
+
+class ComparisonMode(StrEnum):
+    ADJACENT = "adjacent"
+    ANCHOR_TO_EACH = "anchor_to_each"
+    ALL_OBSERVED = "all_observed"
+
+
+class ActionRiskLevel(StrEnum):
+    READ_ONLY = "read_only"
+    LOCAL_STATE = "local_state"
+    CONFIRMATION_ONLY = "confirmation_only"
+    MUTATING = "mutating"
+
+
+class JourneyRunStatus(StrEnum):
+    COMPLETED = "completed"
+    PARTIAL = "partial"
+    FAILED = "failed"
+
+
+class JourneyCoverageStatus(StrEnum):
+    VERIFIED = "verified"
+    PARTIALLY_VERIFIED = "partially_verified"
+    NOT_COVERED = "not_covered"
+
+
 class AuthMode(StrEnum):
     OFF = "off"
     AUTO = "auto"
     REQUIRED = "required"
+
+
+class PageSurface(StrEnum):
+    PORTAL = "portal"
+    CONSOLE = "console"
 
 
 class AuthStatus(StrEnum):
@@ -100,6 +149,7 @@ class PageAuditRequest(BaseModel):
     source: str = "web"
     product: str | None = None
     page_id: str | None = None
+    page_surface: PageSurface | None = None
     device: str = "desktop"
     locale: str = "zh-CN"
     journey_stage: str | None = None
@@ -115,14 +165,17 @@ class PageTarget(BaseModel):
     url: str
     source: str
     product: str | None = None
+    page_surface: PageSurface = PageSurface.PORTAL
     device: str
     locale: str
+    page_map_node_id: str | None = None
 
 
 class ArtifactRef(BaseModel):
     kind: str
     path: str
     media_type: str
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class InteractiveElement(BaseModel):
@@ -151,6 +204,11 @@ class EvidenceElement(BaseModel):
     surrounding_text: str = ""
     interactive_ancestor: bool = False
     enabled: bool = True
+    client_width: float | None = None
+    scroll_width: float | None = None
+    client_height: float | None = None
+    scroll_height: float | None = None
+    computed_style: dict[str, str] = Field(default_factory=dict)
 
 
 class ElementLocation(BaseModel):
@@ -215,6 +273,38 @@ class CheckExecutorRef(BaseModel):
     version: str = "1.0.0"
 
 
+class CapabilityImplementation(BaseModel):
+    """Implementation details kept out of the business-facing CheckSpec."""
+
+    entrypoint: str | None = None
+    skill_id: str | None = None
+    init: dict[str, Any] = Field(default_factory=dict)
+
+
+class CapabilityManifest(BaseModel):
+    id: str
+    version: str = "1.0.0"
+    kind: CapabilityKind
+    supported_scopes: list[CheckScope]
+    required_evidence: list[str] = Field(default_factory=list)
+    modality: SkillModality | None = None
+    implementation: CapabilityImplementation
+
+
+class JourneyExecutorManifest(BaseModel):
+    id: str
+    version: str = "1.0.0"
+    entrypoint: str
+    requires_supervision: bool = True
+    supported_definition_versions: list[str] = Field(default_factory=list)
+
+
+class JourneyComparisonPolicy(BaseModel):
+    mode: ComparisonMode = ComparisonMode.ADJACENT
+    required_facets: list[str] = Field(default_factory=list)
+    min_nodes: int = Field(default=2, ge=2)
+
+
 class StandardSource(BaseModel):
     id: str
     name: str
@@ -244,9 +334,11 @@ class CheckSpec(BaseModel):
     version: str
     title: str
     description: str
+    scope: CheckScope = CheckScope.PAGE
     tags: list[str] = Field(default_factory=list)
     applies_when: dict[str, Any] = Field(default_factory=dict)
     required_evidence: list[str] = Field(default_factory=list)
+    comparison: JourneyComparisonPolicy | None = None
     executor: CheckExecutorRef
     default_severity: Severity = Severity.P2
     standard_refs: list[StandardReference] = Field(default_factory=list)
@@ -263,6 +355,16 @@ class ExecutionBatch(BaseModel):
     batch_id: str
     mode: ExecutionBatchMode
     check_spec_ids: list[str]
+    evidence_profile: str = "text"
+    model_profile: str | None = None
+
+
+class CheckInvocation(BaseModel):
+    invocation_id: str
+    check_spec_id: str
+    subject_node_ids: list[str]
+    comparison_mode: ComparisonMode
+    evidence_facets: list[str] = Field(default_factory=list)
 
 
 class CheckPlan(BaseModel):
@@ -273,6 +375,7 @@ class CheckPlan(BaseModel):
     selected: list[PlanDecision] = Field(default_factory=list)
     skipped: list[PlanDecision] = Field(default_factory=list)
     execution_batches: list[ExecutionBatch] = Field(default_factory=list)
+    invocations: list[CheckInvocation] = Field(default_factory=list)
 
 
 class CheckRun(BaseModel):
@@ -288,13 +391,16 @@ class CheckRun(BaseModel):
     locations: list[ElementLocation] = Field(default_factory=list)
     suggestion: str | None = None
     executor_id: str
+    invocation_id: str | None = None
+    subject_node_ids: list[str] = Field(default_factory=list)
+    comparison_mode: ComparisonMode | None = None
 
 
 class ModelCallRecord(BaseModel):
     call_id: str = Field(default_factory=lambda: new_id("modelcall"))
     batch_id: str
     check_spec_ids: list[str]
-    provider: str = "openrouter"
+    provider: str
     model: str
     provider_request_id: str | None = None
     prompt_tokens: int | None = None
@@ -327,6 +433,7 @@ class Finding(BaseModel):
     suggestion_after: str = ""
     journey_stage_refs: list[str] = Field(default_factory=list)
     review_status: str = "unreviewed"
+    verification_status: str = "verified"
 
 
 class PageAssessment(BaseModel):
@@ -351,4 +458,176 @@ class AuditResult(BaseModel):
     check_plan: CheckPlan
     assessment: PageAssessment
     model_calls: list[ModelCallRecord] = Field(default_factory=list)
+    output_dir: str | None = None
+
+
+class PageMapNode(BaseModel):
+    id: str
+    version: str
+    title: str
+    entry_url: str
+    url_patterns: list[str]
+    expected_primary_stage: str | None = None
+    allowed_stages: list[str] = Field(default_factory=list)
+    expected_surface: PageSurface
+    auth_required: bool = False
+    product: str | None = None
+
+
+class PageMapNodeResolution(BaseModel):
+    node_id: str | None = None
+    node_version: str | None = None
+    matched_pattern: str | None = None
+    status: str
+    reason: str = ""
+
+
+class TransitionActionTarget(BaseModel):
+    role: str
+    name: str
+    exact: bool = True
+    occurrence: int = 0
+    href_contains: str | None = None
+
+
+class TransitionAction(BaseModel):
+    type: str = "click"
+    target: TransitionActionTarget
+
+
+class TransitionEndCondition(BaseModel):
+    page_map_node: str
+    url_contains: str | None = None
+    visible_text: str | None = None
+
+
+class TransitionDefinition(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: str
+    version: str
+    title: str
+    from_node: str = Field(alias="from")
+    to_node: str = Field(alias="to")
+    action: TransitionAction
+    end_condition: TransitionEndCondition
+    risk_level: ActionRiskLevel
+    safe_stop: str
+    auto_run: bool = False
+
+
+class JourneyDefinition(BaseModel):
+    id: str
+    version: str
+    title: str
+    goal: str
+    execution_mode: str = "sequential"
+    start: str
+    transitions: list[str]
+    safety_profile: str = "production-readonly"
+
+
+class SafetyProfile(BaseModel):
+    id: str
+    version: str
+    title: str
+    allowed_risk_levels: list[ActionRiskLevel]
+    prohibited_action_terms: list[str] = Field(default_factory=list)
+    prohibited_url_terms: list[str] = Field(default_factory=list)
+    max_transition_depth: int = 1
+
+
+class ActionRecord(BaseModel):
+    action_id: str
+    action_type: str
+    risk_level: ActionRiskLevel
+    started_at: datetime = Field(default_factory=utc_now)
+    completed_at: datetime | None = None
+    status: str
+    safety_decision: str
+    matched_count: int = 0
+    selected_occurrence: int | None = None
+    element_role: str | None = None
+    element_name: str | None = None
+    element_text: str = ""
+    element_href: str | None = None
+    reason: str = ""
+
+
+class TransitionTrace(BaseModel):
+    transition_id: str
+    transition_version: str
+    from_node_id: str
+    to_node_id: str
+    start_snapshot_id: str
+    end_snapshot_id: str | None = None
+    start_url: str
+    end_url: str | None = None
+    redirect_chain: list[str] = Field(default_factory=list)
+    action: ActionRecord
+    end_resolution: PageMapNodeResolution | None = None
+    safe_stop: str
+    status: str
+    termination_reason: str
+
+
+class JourneyAuditRequest(BaseModel):
+    journey_id: str
+    url: str | None = None
+    source: str = "web"
+    product: str | None = None
+    device: str = "desktop"
+    locale: str = "zh-CN"
+    auth_mode: AuthMode = AuthMode.REQUIRED
+    audit_profile: str = "mvp"
+    model_execution_mode: ModelExecutionMode = ModelExecutionMode.GROUPED
+    supervised: bool = True
+    headless: bool = False
+
+
+class JourneyFact(BaseModel):
+    value: str
+    evidence: str
+    source_element_refs: list[str] = Field(default_factory=list)
+    source_quote: str | None = None
+
+
+class JourneyPageFacts(BaseModel):
+    node_id: str
+    snapshot_id: str
+    url: str
+    title: str
+    stage: str | None = None
+    facts: dict[str, list[JourneyFact]] = Field(default_factory=dict)
+    content_excerpt: str = ""
+
+
+class JourneyEvidenceBundle(BaseModel):
+    journey_id: str
+    nodes: list[JourneyPageFacts]
+
+
+class JourneyAssessment(BaseModel):
+    check_runs: list[CheckRun] = Field(default_factory=list)
+    issue_count: int = 0
+    needs_verification_count: int = 0
+    generated_at: datetime = Field(default_factory=utc_now)
+
+
+class JourneyAuditResult(BaseModel):
+    job_id: str
+    request: JourneyAuditRequest
+    journey: JourneyDefinition
+    status: JourneyRunStatus
+    coverage_status: JourneyCoverageStatus
+    termination_reason: str
+    transition_trace: TransitionTrace
+    transition_traces: list[TransitionTrace] = Field(default_factory=list)
+    transition_check_runs: list[CheckRun] = Field(default_factory=list)
+    journey_evidence: JourneyEvidenceBundle | None = None
+    journey_check_plan: CheckPlan | None = None
+    journey_check_runs: list[CheckRun] = Field(default_factory=list)
+    journey_assessment: JourneyAssessment | None = None
+    journey_model_calls: list[ModelCallRecord] = Field(default_factory=list)
+    page_results: list[AuditResult] = Field(default_factory=list)
     output_dir: str | None = None

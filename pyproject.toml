@@ -14,9 +14,11 @@ dependencies = [
   "jinja2",
   "openjiuwen",
   "playwright",
+  "pillow",
   "pydantic>=2",
   "pydantic-settings",
   "pyyaml",
+  "requests",
   "sqlalchemy>=2",
   "uvicorn[standard]",
 ]
@@ -44,4 +46,3 @@ asyncio_mode = "auto"
 [tool.ruff]
 target-version = "py313"
 line-length = 100
-

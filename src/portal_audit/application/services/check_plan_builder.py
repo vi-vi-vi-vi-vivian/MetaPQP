@@ -6,25 +6,35 @@ import yaml
 
 from portal_audit.domain.models import (
     CheckPlan,
+    CheckScope,
     CheckSpec,
     ExecutionBatch,
     ExecutionBatchMode,
-    ExecutorType,
     ModelExecutionMode,
     PageAuditRequest,
     PageContext,
     PlanDecision,
 )
-from portal_audit.domain.registry import CheckSpecRegistry
+from portal_audit.domain.registry import CapabilityRegistry, CheckSpecRegistry
 
 
 class CheckPlanBuilder:
     version = "1.2.0"
 
-    def __init__(self, registry: CheckSpecRegistry, profiles_root, execution_policies_root):
+    def __init__(
+        self,
+        registry: CheckSpecRegistry,
+        profiles_root,
+        execution_policies_root,
+        *,
+        visual_audit_enabled: bool = True,
+        capabilities: CapabilityRegistry | None = None,
+    ):
         self.registry = registry
         self.profiles_root = profiles_root
         self.execution_policies_root = execution_policies_root
+        self.visual_audit_enabled = visual_audit_enabled
+        self.capabilities = capabilities
 
     def build(self, request: PageAuditRequest, context: PageContext) -> CheckPlan:
         profile_path = self.profiles_root / f"{request.audit_profile}.yaml"
@@ -33,6 +43,15 @@ class CheckPlanBuilder:
         selected: list[PlanDecision] = []
         skipped: list[PlanDecision] = []
         for spec in self.registry.all():
+            if spec.scope != CheckScope.PAGE:
+                skipped.append(
+                    PlanDecision(
+                        check_spec_id=spec.id,
+                        selected=False,
+                        reason=f"scope={spec.scope.value} is not executable in a Page plan",
+                    )
+                )
+                continue
             if spec.id not in enabled:
                 skipped.append(
                     PlanDecision(
@@ -66,12 +85,12 @@ class CheckPlanBuilder:
         deterministic_ids = [
             item.check_spec_id
             for item in selected
-            if item.executor and item.executor.type == ExecutorType.DETERMINISTIC
+            if item.executor and self._is_deterministic(item.check_spec_id)
         ]
         model_ids = [
             item.check_spec_id
             for item in selected
-            if item.executor and item.executor.type == ExecutorType.MODEL_SKILL
+            if item.executor and not self._is_deterministic(item.check_spec_id)
         ]
         batches = [
             ExecutionBatch(
@@ -86,6 +105,10 @@ class CheckPlanBuilder:
                     batch_id=f"single:{check_spec_id}",
                     mode=ExecutionBatchMode.MODEL_SINGLE,
                     check_spec_ids=[check_spec_id],
+                    evidence_profile=self._evidence_profile(check_spec_id),
+                    model_profile=(
+                        "default-vision" if self._is_visual(check_spec_id) else "default-text"
+                    ),
                 )
                 for check_spec_id in model_ids
             )
@@ -100,11 +123,20 @@ class CheckPlanBuilder:
             configured_ids.extend(configured)
             applicable = [item for item in configured if item in selected_model_ids]
             if applicable:
+                modalities = {self._modality(item) for item in applicable}
+                expected_modality = "vision" if batch.get("evidence_profile") == "visual" else "text"
+                if modalities != {expected_modality}:
+                    raise ValueError(
+                        f"Execution policy batch {batch['id']} modality mismatch: "
+                        f"expected={expected_modality}, actual={sorted(modalities)}"
+                    )
                 batches.append(
                     ExecutionBatch(
                         batch_id=batch["id"],
                         mode=ExecutionBatchMode.MODEL_BATCH,
                         check_spec_ids=applicable,
+                        evidence_profile=str(batch.get("evidence_profile", "text")),
+                        model_profile=batch.get("model_profile"),
                     )
                 )
         duplicates = {item for item in configured_ids if configured_ids.count(item) > 1}
@@ -116,15 +148,57 @@ class CheckPlanBuilder:
             )
         return batches
 
-    @staticmethod
+    def _evidence_profile(self, check_spec_id: str) -> str:
+        if self._is_visual(check_spec_id):
+            return "visual"
+        if check_spec_id in {
+            "cta-clarity",
+            "pricing-transparency",
+            "commitment-risk-timing",
+        }:
+            return "transaction_evidence"
+        return "content_evidence"
+
+    def _is_visual(self, check_spec_id: str) -> bool:
+        if self.capabilities is not None:
+            return self._modality(check_spec_id) == "vision"
+        # Compatibility for callers that construct the plan builder without the
+        # capability registry, including external integrations during migration.
+        return "visual" in self.registry.get(check_spec_id).tags
+
+    def _is_deterministic(self, check_spec_id: str) -> bool:
+        if self.capabilities is not None:
+            return (
+                self.capabilities.get(
+                    self.registry.get(check_spec_id).executor.capability_id
+                ).kind.value
+                == "deterministic"
+            )
+        return self.registry.get(check_spec_id).executor.type.value == "deterministic"
+
+    def _modality(self, check_spec_id: str) -> str:
+        if self.capabilities is None:
+            return "vision" if "visual" in self.registry.get(check_spec_id).tags else "text"
+        manifest = self.capabilities.get(
+            self.registry.get(check_spec_id).executor.capability_id
+        )
+        return getattr(manifest.modality, "value", "deterministic")
+
     def _applies(
-        spec: CheckSpec, request: PageAuditRequest, context: PageContext
+        self, spec: CheckSpec, request: PageAuditRequest, context: PageContext
     ) -> tuple[bool, str]:
         conditions = spec.applies_when
+        if "visual" in spec.tags and not self.visual_audit_enabled:
+            return False, "visual audit disabled by runtime settings"
         if not conditions:
             return True, "global rule"
         if (devices := conditions.get("devices")) and request.device not in devices:
             return False, f"device={request.device} not in {devices}"
+        if (surfaces := conditions.get("page_surfaces")) and (
+            request.page_surface is None or request.page_surface.value not in surfaces
+        ):
+            surface = request.page_surface.value if request.page_surface else "unknown"
+            return False, f"page_surface={surface} not in {surfaces}"
         if (locales := conditions.get("locales")) and request.locale not in locales:
             return False, f"locale={request.locale} not in {locales}"
         if (stages := conditions.get("stages")) and context.primary_journey_stage not in stages:

@@ -14,6 +14,7 @@ from portal_audit.domain.models import (
     PageAuditRequest,
     PageContext,
     PageSnapshot,
+    PageSurface,
 )
 from portal_audit.domain.registry import CheckSpecRegistry
 
@@ -133,7 +134,11 @@ def test_mobile_plan_adds_device_specific_deterministic_checks():
         ROOT / "config" / "audit_profiles",
         ROOT / "config" / "execution_policies",
     )
-    request = PageAuditRequest(url="https://example.test/product/demo", device="mobile")
+    request = PageAuditRequest(
+        url="https://example.test/product/demo",
+        device="mobile",
+        page_surface=PageSurface.PORTAL,
+    )
     resolver = PageContextResolver(
         [JourneyStageDetector(), PageArchetypeDetector(), CommerceFeatureDetector()]
     )
@@ -142,11 +147,65 @@ def test_mobile_plan_adds_device_specific_deterministic_checks():
 
     selected = {item.check_spec_id for item in plan.selected}
     assert {"mobile-horizontal-overflow", "mobile-tap-target-size"} <= selected
-    assert len(selected) == 13
+    assert len(selected) == 16
     assert {
         "mobile-horizontal-overflow",
         "mobile-tap-target-size",
     } <= set(plan.execution_batches[0].check_spec_ids)
+    visual_batch = next(
+        batch for batch in plan.execution_batches if batch.batch_id == "portal-mobile-visual"
+    )
+    assert visual_batch.evidence_profile == "visual"
+    assert visual_batch.model_profile == "default-vision"
+    assert set(visual_batch.check_spec_ids) == {
+        "visible-content-occlusion",
+        "text-clipping-and-truncation",
+        "responsive-visual-integrity",
+    }
+
+
+def test_console_mobile_plan_excludes_portal_visual_checks():
+    registry = CheckSpecRegistry(ROOT / "config" / "check_specs").load()
+    builder = CheckPlanBuilder(
+        registry,
+        ROOT / "config" / "audit_profiles",
+        ROOT / "config" / "execution_policies",
+    )
+    request = PageAuditRequest(
+        url="https://console.example.test/demo",
+        device="mobile",
+        page_surface=PageSurface.CONSOLE,
+    )
+
+    plan = builder.build(request, PageContext())
+
+    selected = {item.check_spec_id for item in plan.selected}
+    assert not {
+        "visible-content-occlusion",
+        "text-clipping-and-truncation",
+        "responsive-visual-integrity",
+    }.intersection(selected)
+
+
+def test_visual_audit_runtime_switch_skips_visual_specs():
+    registry = CheckSpecRegistry(ROOT / "config" / "check_specs").load()
+    builder = CheckPlanBuilder(
+        registry,
+        ROOT / "config" / "audit_profiles",
+        ROOT / "config" / "execution_policies",
+        visual_audit_enabled=False,
+    )
+    request = PageAuditRequest(
+        url="https://example.test/product/demo",
+        device="mobile",
+        page_surface=PageSurface.PORTAL,
+    )
+
+    plan = builder.build(request, PageContext())
+    skipped = {item.check_spec_id: item.reason for item in plan.skipped}
+
+    assert skipped["visible-content-occlusion"] == "visual audit disabled by runtime settings"
+    assert not any(batch.evidence_profile == "visual" for batch in plan.execution_batches)
 
 
 def test_english_plan_skips_chinese_copy_quality_skill():

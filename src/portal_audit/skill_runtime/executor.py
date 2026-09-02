@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 
-from portal_audit.application.ports.model import ModelPort
+from portal_audit.application.ports.model import ModelPort, ModelRequest, TextContent
 from portal_audit.domain.models import (
     CheckExecutionResult,
     CheckRun,
@@ -15,7 +15,10 @@ from portal_audit.domain.models import (
     PageSnapshot,
     Severity,
 )
-from portal_audit.skill_runtime.evidence_compactor import ModelEvidenceCompactor
+from portal_audit.skill_runtime.evidence_compactor import (
+    EvidenceContractValidator,
+    ModelEvidenceCompactor,
+)
 from portal_audit.skill_runtime.loader import SkillLoader
 
 RESULT_SCHEMA = {
@@ -48,13 +51,19 @@ class ModelSkillExecutor:
         loader: SkillLoader,
         model: ModelPort,
         evidence_compactor: ModelEvidenceCompactor | None = None,
+        evidence_validator: EvidenceContractValidator | None = None,
     ):
         self.loader = loader
         self.model = model
         self.evidence_compactor = evidence_compactor or ModelEvidenceCompactor()
+        self.evidence_validator = evidence_validator or EvidenceContractValidator()
 
     async def execute(
-        self, spec: CheckSpec, snapshot: PageSnapshot, context: PageContext
+        self,
+        spec: CheckSpec,
+        snapshot: PageSnapshot,
+        context: PageContext,
+        evidence_profile: str = "content_evidence",
     ) -> CheckExecutionResult:
         if not self.model.enabled:
             return CheckExecutionResult(
@@ -62,9 +71,9 @@ class ModelSkillExecutor:
                     CheckRun(
                         check_spec_id=spec.id,
                         check_spec_version=spec.version,
-                        status=CheckStatus.NEEDS_VERIFICATION,
+                        status=CheckStatus.ERROR,
                         title=spec.title,
-                        reason="model capability is not configured",
+                        reason="未执行：文本模型未配置",
                         severity=spec.default_severity,
                         confidence=0,
                         executor_id=spec.executor.capability_id,
@@ -72,20 +81,24 @@ class ModelSkillExecutor:
                 ]
             )
         skill = self.loader.load(spec.executor.capability_id)
+        page_evidence = self.evidence_compactor.compact(snapshot, evidence_profile)
+        self.evidence_validator.validate([spec], page_evidence)
         evidence = {
-            "page": self.evidence_compactor.compact(snapshot),
+            "page": page_evidence,
             "context": context.model_dump(mode="json"),
             "check_spec": spec.model_dump(mode="json"),
         }
         completion = await self.model.complete_json(
-            system=(
-                f"{skill.instructions}\n\n"
-                "只依据提供的证据执行当前 CheckSpec；证据不足时返回 needs_verification。"
-                "发现问题时，element_refs 只填写 page.elements 中能直接定位问题的 element_ref；"
-                "通过或无法定位时返回空数组。"
-            ),
-            user=json.dumps(evidence, ensure_ascii=False),
-            schema=RESULT_SCHEMA,
+            ModelRequest(
+                system=(
+                    f"{skill.instructions}\n\n"
+                    "只依据提供的证据执行当前 CheckSpec；证据不足时返回 needs_verification。"
+                    "发现问题时，element_refs 只填写 page.elements 中能直接定位问题的 element_ref；"
+                    "通过或无法定位时返回空数组。"
+                ),
+                content=[TextContent(json.dumps(evidence, ensure_ascii=False))],
+                schema=RESULT_SCHEMA,
+            )
         )
         result = completion.content
         by_ref = {item.element_ref: item for item in snapshot.evidence_elements}
@@ -121,6 +134,7 @@ class ModelSkillExecutor:
                 ModelCallRecord(
                     batch_id=f"single:{spec.id}",
                     check_spec_ids=[spec.id],
+                    provider=completion.provider,
                     model=completion.model,
                     provider_request_id=completion.provider_request_id,
                     prompt_tokens=completion.prompt_tokens,

@@ -1,0 +1,16 @@
+id: visible-content-occlusion
+version: 1.0.0
+title: 移动端关键内容不应被意外遮挡
+description: 通过移动端截图检查关键文本、CTA、表单控件是否被浮层、粘性元素或其他内容明显遮挡并影响阅读或操作。
+tags: [mobile, portal, visual, layout]
+applies_when: {devices: [mobile], page_surfaces: [portal]}
+required_evidence: [visual_viewport, visual_overview, visual_tiles, element_bounds]
+executor: {type: model_skill, capability_id: visible-content-occlusion}
+default_severity: p1
+standard_refs:
+  - criterion_id: metapqp-internal/visible-content-occlusion
+    relation: implements
+  - criterion_id: nielsen-heuristics/H1
+    relation: supports
+    notes: 遮挡会削弱系统状态和当前可操作内容的可见性。
+

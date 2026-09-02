@@ -10,8 +10,9 @@ from portal_audit.application.services.baseline_collector import BaselineCollect
 from portal_audit.application.services.check_executor import CheckExecutor
 from portal_audit.application.services.check_plan_builder import CheckPlanBuilder
 from portal_audit.application.services.page_context_resolver import PageContextResolver
+from portal_audit.application.services.page_surface import resolve_page_surface
 from portal_audit.application.services.run_paths import page_run_relative_dir
-from portal_audit.domain.models import AuditResult, PageAuditRequest, PageTarget
+from portal_audit.domain.models import AuditResult, PageAuditRequest, PageSnapshot, PageTarget
 
 
 class PageAuditPipeline:
@@ -32,6 +33,28 @@ class PageAuditPipeline:
         self.assessment_builder = assessment_builder
         self.output_writer = output_writer
 
+    async def audit_snapshot(
+        self,
+        *,
+        request: PageAuditRequest,
+        target: PageTarget,
+        snapshot: PageSnapshot,
+        job_id: str,
+    ) -> AuditResult:
+        """Run the existing Page pipeline after an outer Journey captured the page."""
+        state = {
+            "job_id": job_id,
+            "request": request.model_dump(mode="json"),
+            "target": target.model_dump(mode="json"),
+            "snapshot": snapshot.model_dump(mode="json"),
+        }
+        state = await self.resolve_context(state)
+        state = await self.build_plan(state)
+        state = await self.execute_checks(state)
+        state = await self.build_assessment(state)
+        persisted = await self.persist(state)
+        return AuditResult.model_validate(persisted["result"])
+
     @staticmethod
     def target_for(request: PageAuditRequest) -> PageTarget:
         page_id = request.page_id or f"page-{hashlib.sha256(request.url.encode()).hexdigest()[:12]}"
@@ -41,6 +64,7 @@ class PageAuditPipeline:
             url=target_url,
             source=request.source,
             product=request.product,
+            page_surface=resolve_page_surface(request.url, request.page_surface),
             device=request.device,
             locale=request.locale,
         )
@@ -79,9 +103,11 @@ class PageAuditPipeline:
         return {**state, "context": context.model_dump(mode="json")}
 
     async def build_plan(self, state: dict) -> dict:
-        from portal_audit.domain.models import PageContext
+        from portal_audit.domain.models import PageContext, PageTarget
 
         request = PageAuditRequest.model_validate(state["request"])
+        target = PageTarget.model_validate(state["target"])
+        request = request.model_copy(update={"page_surface": target.page_surface})
         context = PageContext.model_validate(state["context"])
         plan = self.plan_builder.build(request, context)
         return {**state, "check_plan": plan.model_dump(mode="json")}

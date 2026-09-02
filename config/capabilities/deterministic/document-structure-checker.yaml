@@ -1,0 +1,6 @@
+id: document-structure-checker
+version: 1.0.0
+kind: deterministic
+supported_scopes: [page]
+required_evidence: [title, headings]
+implementation: {entrypoint: "portal_audit.capabilities.checkers.page:DocumentStructureChecker"}

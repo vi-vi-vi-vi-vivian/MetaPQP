@@ -1,0 +1,15 @@
+{
+  "skill_name": "text-clipping-and-truncation",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "价格末尾字符在截图中被切断，scrollWidth 大于 clientWidth，overflow-x=hidden 且没有 ellipsis 或 line-clamp。",
+      "expected_output": "fail，并返回价格元素的 element_ref。"
+    },
+    {
+      "id": 2,
+      "prompt": "卡片摘要使用 text-overflow=ellipsis，省略号清晰可见，完整内容可进入详情查看。",
+      "expected_output": "pass，不报告设计性省略。"
+    }
+  ]
+}

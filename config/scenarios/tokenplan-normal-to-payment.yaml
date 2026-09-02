@@ -7,8 +7,13 @@ auth:
   account_id: default
 execution_matrix:
   source: web
-  devices: [desktop, mobile]
-  locales: [zh-CN, en-US]
+  by_page_surface:
+    portal:
+      devices: [desktop, mobile]
+      locale_strategy: url
+    console:
+      devices: [desktop]
+      locales: [zh-CN, en-US]
 required_stages: [awareness, purchase, order, payment]
 stop_after: payment
 safety:

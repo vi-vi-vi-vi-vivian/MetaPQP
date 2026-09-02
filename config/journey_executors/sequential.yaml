@@ -1,0 +1,5 @@
+id: sequential
+version: 1.0.0
+entrypoint: "portal_audit.journey_executors.sequential:SequentialJourneyExecutor"
+requires_supervision: true
+supported_definition_versions: ["1.0.0"]

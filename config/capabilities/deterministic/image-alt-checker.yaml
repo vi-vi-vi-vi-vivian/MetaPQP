@@ -1,0 +1,6 @@
+id: image-alt-checker
+version: 1.0.0
+kind: deterministic
+supported_scopes: [page]
+required_evidence: [evidence_elements]
+implementation: {entrypoint: "portal_audit.capabilities.checkers.page:ImageAltChecker"}

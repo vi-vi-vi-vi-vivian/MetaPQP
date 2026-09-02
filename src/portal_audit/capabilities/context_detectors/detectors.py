@@ -52,7 +52,7 @@ class PageArchetypeDetector:
 
     def detect(self, snapshot: PageSnapshot) -> list[ContextObservation]:
         url = snapshot.final_url.lower()
-        text = f"{snapshot.title} {snapshot.body_text[:10000]}".lower()
+        text = f"{snapshot.title} {snapshot.body_text}".lower()
         candidates = [
             (
                 "payment_page",

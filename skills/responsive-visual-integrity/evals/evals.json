@@ -1,0 +1,15 @@
+{
+  "skill_name": "responsive-visual-integrity",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "移动端套餐卡片相互覆盖，价格与另一张卡片的 CTA 重叠，DOM bounds 支持明显交叉。",
+      "expected_output": "fail，返回发生重叠的元素引用。"
+    },
+    {
+      "id": 2,
+      "prompt": "横向卡片轮播只显示下一张卡片的一部分，祖先容器可横向滚动。",
+      "expected_output": "pass，不把设计性横滑区域报告为响应式破版。"
+    }
+  ]
+}

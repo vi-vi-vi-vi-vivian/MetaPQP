@@ -16,6 +16,7 @@ def test_huawei_console_target_makes_chinese_locale_explicit():
     target = PageAuditPipeline.target_for(request)
 
     assert target.page_id == "purchase"
+    assert target.page_surface == "console"
     assert target.url == (
         "https://console.huaweicloud.com/modelarts/"
         "?region=cn-southwest-2&locale=zh-cn#/model-studio/resourcePlanManagement"
@@ -28,3 +29,4 @@ def test_target_does_not_rewrite_non_console_url():
     target = PageAuditPipeline.target_for(request)
 
     assert target.url == request.url
+    assert target.page_surface == "portal"

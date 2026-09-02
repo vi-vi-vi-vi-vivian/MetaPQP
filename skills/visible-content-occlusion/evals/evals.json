@@ -1,0 +1,15 @@
+{
+  "skill_name": "visible-content-occlusion",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "移动端截图中固定底栏覆盖了完整的购买按钮，DOM 给出二者重叠区域且底栏 position=fixed。",
+      "expected_output": "fail，并返回被遮挡按钮和固定底栏两个 element_ref。"
+    },
+    {
+      "id": 2,
+      "prompt": "粘性导航正常停留在页面顶部，没有覆盖标题或操作控件。",
+      "expected_output": "pass，不把正常粘性导航报告为遮挡。"
+    }
+  ]
+}

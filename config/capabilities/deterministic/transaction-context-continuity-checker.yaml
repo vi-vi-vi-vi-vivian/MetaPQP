@@ -1,0 +1,6 @@
+id: transaction-context-continuity-checker
+version: 1.0.0
+kind: deterministic
+supported_scopes: [transition]
+required_evidence: [transition_trace, start_snapshot, end_snapshot]
+implementation: {entrypoint: "portal_audit.capabilities.checkers.transition:TransactionContextContinuityChecker"}

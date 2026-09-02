@@ -4,8 +4,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import yaml
+
+if TYPE_CHECKING:
+    from portal_audit.domain.registry import CapabilityRegistry
 
 
 @dataclass(frozen=True)
@@ -18,10 +22,16 @@ class LoadedSkill:
 
 
 class SkillLoader:
-    def __init__(self, root: Path):
+    def __init__(self, root: Path, capabilities: CapabilityRegistry | None = None):
         self.root = root
+        self.capabilities = capabilities
 
-    def load(self, skill_id: str) -> LoadedSkill:
+    def load(self, capability_id: str) -> LoadedSkill:
+        skill_id = (
+            self.capabilities.skill_id_for(capability_id)
+            if self.capabilities is not None
+            else capability_id
+        )
         path = self.root / skill_id / "SKILL.md"
         text = path.read_text(encoding="utf-8")
         if not text.startswith("---\n"):

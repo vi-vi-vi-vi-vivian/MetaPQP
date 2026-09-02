@@ -2,6 +2,8 @@ import json
 from pathlib import Path
 
 from portal_audit.domain.models import (
+    CheckRun,
+    CheckStatus,
     ElementLocation,
     Finding,
     ModelCallRecord,
@@ -56,6 +58,7 @@ def test_output_writer_records_real_model_usage_without_duplication(tmp_path):
     result = make_result(job_id="20260824-120000")
     result.model_calls.append(
         ModelCallRecord(
+            provider="fake",
             batch_id="single:copy-quality",
             check_spec_ids=["copy-quality"],
             model="test-model",
@@ -132,3 +135,53 @@ def test_output_writer_emits_json_locations_and_annotated_evidence_map(tmp_path)
     assert (run_dir / issue["annotated_screenshot"]).is_file()
     assert "问题证据地图" in report
     assert "在截图中查看定位框" in report
+
+
+def test_standard_reference_html_names_wcag_and_nielsen_sources():
+    rendered = OutputWriter._standard_refs_html(
+        [
+            {
+                "source_id": "wcag-2.2",
+                "source_name": "Web Content Accessibility Guidelines (WCAG) 2.2",
+                "criterion_id": "wcag-2.2/1.1.1",
+                "criterion_title": "Non-text Content",
+                "criterion_level": "A",
+                "relation": "partial_coverage",
+            },
+            {
+                "source_id": "nielsen-heuristics",
+                "source_name": "Nielsen 10 Usability Heuristics for User Interface Design",
+                "criterion_id": "nielsen-heuristics/H2",
+                "criterion_title": "Match Between the System and the Real World",
+                "relation": "supports",
+            },
+        ]
+    )
+
+    assert "WCAG" in rendered
+    assert "1.1.1 Non-text Content · A级 · 部分覆盖" in rendered
+    assert "Nielsen" in rendered
+    assert "H2 Match Between the System and the Real World" in rendered
+
+
+def test_report_renders_provider_failure_as_not_executed_without_technical_exception(tmp_path):
+    result = make_result(job_id="provider-failure")
+    result.assessment.check_runs.append(
+        CheckRun(
+            check_spec_id="visible-content-occlusion",
+            check_spec_version="1.0.0",
+            status=CheckStatus.ERROR,
+            title="移动端关键内容不应被意外遮挡",
+            reason="未执行：视觉服务暂时不可用",
+            severity=Severity.P1,
+            confidence=0,
+            executor_id="visible-content-occlusion",
+        )
+    )
+    writer = OutputWriter(tmp_path, model_name="test-model", model_enabled=True)
+
+    report = (writer.write(result) / "report.html").read_text(encoding="utf-8")
+
+    assert "未执行：视觉服务暂时不可用" in report
+    assert "RemoteProtocolError" not in report
+    assert "Server disconnected" not in report

@@ -90,6 +90,118 @@ async def test_broken_link_checker_treats_connect_timeout_as_unverified(monkeypa
     assert result.evidence == ["unverified http://www.huaweicloud.com/: ConnectTimeout"]
 
 
+async def test_broken_link_checker_uses_get_when_head_returns_404(monkeypatch):
+    class HeadUnsupportedClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        async def head(self, url):
+            return httpx.Response(404, request=httpx.Request("HEAD", url))
+
+        async def get(self, url, headers=None):
+            return httpx.Response(200, request=httpx.Request("GET", url))
+
+    monkeypatch.setattr(
+        page_checkers.httpx,
+        "AsyncClient",
+        lambda **kwargs: HeadUnsupportedClient(),
+    )
+    spec = deterministic_spec("broken-links", "broken-links-checker")
+    snapshot = PageSnapshot(
+        page_id="links",
+        requested_url="https://example.test",
+        final_url="https://example.test",
+        title="Links",
+        viewport={"width": 1440, "height": 1000},
+        interactive_elements=[
+            InteractiveElement(
+                tag="a",
+                text="建议反馈",
+                href="https://bbs.huaweicloud.com/suggestion",
+            )
+        ],
+    )
+
+    result = await BrokenLinksChecker().execute(spec, snapshot)
+
+    assert result.status == "pass"
+    assert "broken_links=0" in result.reason
+
+
+async def test_broken_link_checker_confirms_404_with_get(monkeypatch):
+    class MissingClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        async def head(self, url):
+            return httpx.Response(404, request=httpx.Request("HEAD", url))
+
+        async def get(self, url, headers=None):
+            return httpx.Response(404, request=httpx.Request("GET", url))
+
+    monkeypatch.setattr(page_checkers.httpx, "AsyncClient", lambda **kwargs: MissingClient())
+    spec = deterministic_spec("broken-links", "broken-links-checker")
+    snapshot = PageSnapshot(
+        page_id="links",
+        requested_url="https://example.test",
+        final_url="https://example.test",
+        title="Links",
+        viewport={"width": 1440, "height": 1000},
+        interactive_elements=[
+            InteractiveElement(tag="a", text="Missing", href="https://example.test/missing")
+        ],
+    )
+
+    result = await BrokenLinksChecker().execute(spec, snapshot)
+
+    assert result.status == "fail"
+    assert result.evidence == ["404 https://example.test/missing"]
+
+
+async def test_broken_link_checker_treats_server_error_as_transient(monkeypatch):
+    class UnavailableClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        async def head(self, url):
+            return httpx.Response(521, request=httpx.Request("HEAD", url))
+
+        async def get(self, url, headers=None):
+            return httpx.Response(521, request=httpx.Request("GET", url))
+
+    monkeypatch.setattr(
+        page_checkers.httpx,
+        "AsyncClient",
+        lambda **kwargs: UnavailableClient(),
+    )
+    spec = deterministic_spec("broken-links", "broken-links-checker")
+    snapshot = PageSnapshot(
+        page_id="links",
+        requested_url="https://example.test",
+        final_url="https://example.test",
+        title="Links",
+        viewport={"width": 390, "height": 844},
+        interactive_elements=[
+            InteractiveElement(tag="a", text="备案", href="https://beian.miit.gov.cn/")
+        ],
+    )
+
+    result = await BrokenLinksChecker().execute(spec, snapshot)
+
+    assert result.status == "needs_verification"
+    assert "transient_server_errors=1" in result.reason
+    assert result.evidence == ["521 https://beian.miit.gov.cn/"]
+
+
 async def test_document_structure_does_not_fail_for_multiple_h1_elements():
     spec = deterministic_spec("document-structure", "document-structure-checker")
     snapshot = PageSnapshot(
@@ -154,6 +266,32 @@ async def test_image_alt_requires_review_when_image_purpose_is_ambiguous():
 
     assert result.status == "needs_verification"
     assert "ambiguous_images=1" in result.reason
+
+
+async def test_image_alt_gives_actionable_logo_guidance():
+    spec = deterministic_spec("image-alt", "image-alt-checker")
+    snapshot = PageSnapshot(
+        page_id="landing",
+        requested_url="https://example.test",
+        final_url="https://example.test",
+        title="Landing",
+        viewport={"width": 1440, "height": 1000},
+        evidence_elements=[
+            EvidenceElement(
+                element_ref="dom-1",
+                tag="img",
+                selector="#brand-logo",
+                has_alt=False,
+                interactive_ancestor=True,
+            )
+        ],
+    )
+
+    result = await ImageAltChecker().execute(spec, snapshot)
+
+    assert result.status == "fail"
+    assert 'alt="智果园"' in result.suggestion
+    assert 'aria-label="智果园首页"' in result.suggestion
 
 
 async def test_runtime_checker_requires_impact_verification_for_console_errors():

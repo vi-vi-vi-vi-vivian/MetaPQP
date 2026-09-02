@@ -1,0 +1,20 @@
+id: cross-stage-lifecycle-state-consistency
+version: 1.0.0
+title: 跨阶段产品或资源状态一致性
+description: 在能够确认同一账号、区域和业务对象时，检查可购买、已开通、使用中、到期和禁用等状态是否跨页面同步；对象或采集时点不能确认时不得报告问题。
+scope: journey
+tags: [journey, cross-stage, lifecycle, consistency]
+applies_when: {execution_modes: [sequential]}
+required_evidence: [journey_page_facts]
+comparison:
+  mode: adjacent
+  required_facets: [lifecycle_state, product_identity]
+  min_nodes: 2
+executor: {type: model_skill, capability_id: journey-cross-stage-consistency}
+default_severity: p1
+standard_refs:
+  - criterion_id: metapqp-internal/cross-stage-lifecycle-state-consistency
+    relation: implements
+  - criterion_id: nielsen-heuristics/H1
+    relation: supports
+

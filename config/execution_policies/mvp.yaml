@@ -2,13 +2,22 @@ id: mvp
 version: 1.0.0
 model_batches:
   - id: content-understanding
+    evidence_profile: content_evidence
     check_specs:
       - copy-quality
       - terminology-clarity
       - content-internal-consistency
       - product-value-clarity
   - id: transaction-decision
+    evidence_profile: transaction_evidence
     check_specs:
       - cta-clarity
       - pricing-transparency
       - commitment-risk-timing
+  - id: portal-mobile-visual
+    evidence_profile: visual
+    model_profile: default-vision
+    check_specs:
+      - visible-content-occlusion
+      - text-clipping-and-truncation
+      - responsive-visual-integrity

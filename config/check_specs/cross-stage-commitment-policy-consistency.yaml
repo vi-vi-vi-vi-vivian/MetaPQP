@@ -1,0 +1,19 @@
+id: cross-stage-commitment-policy-consistency
+version: 1.0.0
+title: 跨阶段持续承诺、变更与退出规则一致性
+description: 检查自动续费、持续扣款、变更、退款、退订及资源释放等规则是否在不同页面存在会影响决策或造成资金与数据风险的明确冲突。
+scope: journey
+tags: [journey, cross-stage, policy, consistency]
+applies_when: {execution_modes: [sequential]}
+required_evidence: [journey_page_facts]
+comparison:
+  mode: all_observed
+  required_facets: [commitment_policy, commercial_terms]
+  min_nodes: 2
+executor: {type: model_skill, capability_id: journey-cross-stage-consistency}
+default_severity: p1
+standard_refs:
+  - criterion_id: metapqp-internal/cross-stage-commitment-policy-consistency
+    relation: implements
+  - criterion_id: nielsen-heuristics/H5
+    relation: supports

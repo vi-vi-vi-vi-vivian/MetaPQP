@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MetaPQP｜三类 CheckPlan Builder</title>
+  <style>
+    :root { --ink:#17203a; --muted:#69768a; --line:#dce3ed; --bg:#f4f7fb; --white:#fff; --cyan:#2d8c9e; --cyan-soft:#e8f6f7; --violet:#586da7; --violet-soft:#edf0fa; --orange:#e87532; --orange-soft:#fff0e7; --green:#2e8b61; --green-soft:#ebf7f0; --gold:#b66a09; --gold-soft:#fff7e6; --context:var(--cyan); --context-soft:var(--cyan-soft); --config:var(--violet); --config-soft:var(--violet-soft); --decision:var(--orange); --decision-soft:var(--orange-soft); --result:var(--green); --result-soft:var(--green-soft); }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--ink); font-family:Inter, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif; }
+    .page { width:min(1440px, calc(100% - 48px)); margin:0 auto; padding:48px 0 72px; }
+    .hero { display:flex; justify-content:space-between; align-items:end; gap:60px; margin:0 0 28px; }
+    .eyebrow, .kicker { margin:0 0 10px; color:var(--cyan); font:800 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing:.12em; text-transform:uppercase; }
+    h1 { max-width:780px; margin:0; font-size:46px; line-height:1.08; letter-spacing:-.055em; }
+    .hero p:last-child { width:390px; margin:0 0 4px; padding-left:18px; border-left:3px solid var(--orange); color:var(--muted); font-size:13px; line-height:1.7; }
+    .surface { overflow:hidden; background:var(--white); border:1px solid var(--line); border-radius:16px; box-shadow:0 20px 55px rgba(35,52,76,.07); }
+    .surface-header { display:flex; justify-content:space-between; gap:28px; align-items:end; padding:26px 30px 22px; border-bottom:1px solid var(--line); }
+    h2 { margin:0; font-size:22px; letter-spacing:-.035em; }
+    .surface-header p { max-width:500px; margin:0; color:var(--muted); font-size:12px; line-height:1.65; }
+    .legend { display:flex; flex-wrap:wrap; gap:14px; padding:13px 30px; border-bottom:1px solid var(--line); color:var(--muted); font-size:10px; }
+    .legend span { display:flex; align-items:center; gap:6px; }
+    .legend i { width:8px; height:8px; border-radius:50%; background:var(--dot); }
+    .diagram { padding:28px 30px 30px; background:linear-gradient(180deg,#fff 0%,#f9fbfd 100%); }
+    .lane-label { display:flex; align-items:center; gap:10px; margin:0 0 13px; color:var(--muted); font:800 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing:.12em; }
+    .lane-label::after { flex:1; height:1px; background:var(--line); content:""; }
+    .page-panel { padding:22px; border:1px solid #d7e0ec; border-top:4px solid var(--orange); border-radius:12px; background:#fff; }
+    .page-panel-head { display:flex; align-items:baseline; justify-content:space-between; gap:16px; margin-bottom:18px; }
+    .page-panel-head h3 { margin:0; font-size:17px; letter-spacing:-.025em; }
+    .page-panel-head p { margin:0; color:var(--muted); font-size:11px; }
+    .page-flow { display:grid; grid-template-columns:1.55fr 1.15fr 1.08fr 1fr; gap:36px; align-items:stretch; }
+    .node { position:relative; min-height:154px; padding:16px; border:1px solid var(--line); border-radius:8px; }
+    .node:not(:last-child)::after, .exec-node:not(:last-child)::after, .cross-node:not(:last-child)::after { position:absolute; top:50%; right:-29px; color:#9aa7b9; content:"→"; font-size:24px; font-weight:300; transform:translateY(-50%); }
+    .fact { background:var(--cyan-soft); border-color:var(--cyan); }
+    .config { background:var(--violet-soft); border-color:var(--violet); }
+    .builder { background:var(--orange-soft); border:2px solid var(--orange); }
+    .choice { background:var(--gold-soft); border-color:var(--gold); }
+    .out { background:var(--green-soft); border-color:var(--green); }
+    .node-kicker { display:block; margin-bottom:9px; color:#718097; font:800 9px/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing:.09em; text-transform:uppercase; }
+    .node strong { display:block; margin-bottom:7px; font-size:13px; }
+    .node small { display:block; color:var(--muted); font:10px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .chips { display:flex; flex-wrap:wrap; gap:5px; margin-top:10px; }
+    .chips b { padding:4px 6px; border:1px solid rgba(45,140,158,.2); border-radius:3px; background:rgba(255,255,255,.65); color:#287688; font:700 9px/1 ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .stack { display:grid; gap:7px; }
+    .stack div { padding-bottom:7px; border-bottom:1px solid rgba(88,109,167,.18); }
+    .stack div:last-child { padding-bottom:0; border:0; }
+    .stack b { display:block; color:#4e6196; font-size:11px; }
+    .stack span { color:var(--muted); font:9px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .page-execution { display:grid; grid-template-columns:1fr 1fr 1fr 1.22fr; gap:36px; align-items:stretch; margin-top:18px; padding-top:18px; border-top:1px dashed #c7d2df; }
+    .exec-node { position:relative; min-height:83px; padding:14px 15px; border-left:3px solid var(--cyan); background:#f7fafc; }
+    .exec-node.model { border-color:var(--violet); }
+    .exec-node.batch { border-color:var(--orange); }
+    .exec-node.plan { border-color:var(--green); background:var(--green-soft); }
+    .exec-node strong { display:block; margin:4px 0; font-size:12px; }
+    .exec-node small { color:var(--muted); font:9px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .cross-area { margin-top:27px; }
+    .cross-grid { display:grid; grid-template-columns:1fr 1fr; gap:18px; }
+    .cross-panel { padding:18px; border:1px solid var(--line); border-radius:11px; background:#fff; }
+    .cross-panel.transition { border-top:3px solid var(--orange); }
+    .cross-panel.journey { border-top:3px solid var(--green); }
+    .cross-head { display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin-bottom:14px; }
+    .cross-head h3 { margin:0; font-size:14px; }
+    .cross-head small { color:var(--muted); font:9px/1 ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .cross-flow { display:grid; grid-template-columns:1.1fr 1.1fr 1fr; gap:32px; }
+    .cross-node { position:relative; min-height:77px; padding:12px; border:1px solid var(--line); border-radius:6px; }
+    .cross-node strong { display:block; margin-bottom:5px; font-size:11px; }
+    .cross-node small { color:var(--muted); font:9px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .notes { display:grid; grid-template-columns:repeat(3,1fr); gap:1px; margin:28px 0 0; background:var(--line); border:1px solid var(--line); border-radius:10px; overflow:hidden; }
+    .note { padding:15px 18px; background:#fff; }
+    .note b { display:block; margin-bottom:5px; font-size:11px; }
+    .note span { color:var(--muted); font-size:10px; line-height:1.55; }
+    .footer { margin:14px 4px 0; color:#8090a4; font-size:10px; line-height:1.55; }
+    .legacy-detail { overflow:hidden; margin-bottom:26px; border:1px solid #dbe2ec; border-radius:16px; background:var(--white); box-shadow:0 18px 45px rgba(23,32,58,.07); }
+    .legacy-detail-head { display:flex; justify-content:space-between; gap:24px; align-items:center; padding:20px 24px 14px; border-bottom:1px solid #e6ebf2; }
+    .legacy-detail-head h2 { font-size:19px; }
+    .legacy-legend { display:flex; flex-wrap:wrap; gap:15px; color:var(--muted); font-size:11px; }
+    .legacy-legend span::before { display:inline-block; width:8px; height:8px; margin-right:6px; border-radius:2px; background:var(--dot); content:""; }
+    .legacy-scroll { overflow-x:auto; padding:8px 18px 4px; }
+    .legacy-svg { display:block; width:100%; min-width:1120px; height:auto; }
+    .legacy-svg .node { stroke-width:2; rx:7; filter:url(#pageNodeShadow); }
+    .legacy-svg .input-node { fill:var(--context-soft); stroke:var(--context); }
+    .legacy-svg .config-node { fill:var(--config-soft); stroke:var(--config); }
+    .legacy-svg .builder-node { fill:var(--decision-soft); stroke:var(--decision); stroke-width:3; }
+    .legacy-svg .decision-node { fill:#fff8f3; stroke:var(--decision); }
+    .legacy-svg .checker-node { fill:#eef5fb; stroke:#39739c; }
+    .legacy-svg .skill-node { fill:var(--config-soft); stroke:var(--config); }
+    .legacy-svg .result-node { fill:var(--result-soft); stroke:var(--result); stroke-width:3; }
+    .legacy-svg .edge { fill:none; stroke:#738096; stroke-width:2.2; marker-end:url(#pageArrow); }
+    .legacy-svg .edge.config { stroke:var(--config); }
+    .legacy-svg .edge.output { stroke:var(--decision); stroke-width:2.6; }
+    .legacy-svg .edge.final { stroke:var(--result); stroke-width:2.8; }
+    .legacy-svg .edge.reference { stroke-dasharray:6 6; marker-end:url(#pageArrowConfig); }
+    .legacy-svg text { fill:var(--ink); font-family:"PingFang SC", "Microsoft YaHei", system-ui, sans-serif; text-anchor:middle; }
+    .legacy-svg .title { font-size:16px; font-weight:750; }
+    .legacy-svg .value { fill:#526079; font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:11px; }
+    .legacy-svg .builder-title { font-size:21px; font-weight:800; }
+    .legacy-svg .builder-sub { fill:#9d4b1d; font-size:11px; font-weight:650; }
+    .legacy-svg .edge-label { fill:var(--muted); font-size:10px; }
+    @media (max-width:900px) { .hero,.surface-header { align-items:flex-start; flex-direction:column; gap:16px; } .hero p:last-child { width:auto; } .page-flow,.page-execution,.cross-grid,.cross-flow,.notes { grid-template-columns:1fr; } .node:not(:last-child)::after,.exec-node:not(:last-child)::after,.cross-node:not(:last-child)::after { top:auto; right:auto; bottom:-23px; left:50%; transform:translateX(-50%) rotate(90deg); } }
+    @media (max-width:560px) { .page { width:calc(100% - 24px); padding-top:30px; } h1 { font-size:36px; } .surface-header,.diagram { padding-left:18px; padding-right:18px; } .legend { padding-inline:18px; } }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="hero">
+      <div><p class="eyebrow">MetaPQP · CheckPlan compilation</p><h1>三类 CheckPlan Builder<br>一张图看清主链与分支</h1></div>
+      <p>规则先由版本化配置确定候选范围，再按 <strong>scope</strong> 分流给三个 Builder。Page 是完整展开的主链；Transition 和 Journey 是跨页面的补充检查。</p>
+    </header>
+
+    <section class="legacy-detail" aria-labelledby="legacy-title">
+      <div class="legacy-detail-head"><h2 id="legacy-title">Page CheckPlan Builder：单页计划细节</h2><div class="legacy-legend"><span style="--dot:var(--context)">本次页面上下文</span><span style="--dot:var(--config)">版本化配置</span><span style="--dot:var(--decision)">编译决策</span><span style="--dot:var(--result)">Page 计划</span></div></div>
+      <div class="legacy-scroll">
+        <svg class="legacy-svg" viewBox="0 0 1400 820" role="img" aria-label="Page CheckPlan Builder 的单页计划细节图">
+          <defs>
+            <filter id="pageNodeShadow" x="-10%" y="-10%" width="130%" height="140%"><feDropShadow dx="5" dy="6" stdDeviation="0" flood-color="#17203a" flood-opacity=".06"/></filter>
+            <marker id="pageArrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L8,4 L0,8 Z" fill="#738096"/></marker>
+            <marker id="pageArrowConfig" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L8,4 L0,8 Z" fill="#52689b"/></marker>
+          </defs>
+          <rect class="node input-node" x="28" y="34" width="180" height="82"/><text class="title" x="118" y="66">Device</text><text class="value" x="118" y="92">desktop</text>
+          <rect class="node input-node" x="250" y="34" width="180" height="82"/><text class="title" x="340" y="66">Locale</text><text class="value" x="340" y="92">zh-CN</text>
+          <rect class="node input-node" x="472" y="34" width="200" height="82"/><text class="title" x="572" y="66">Journey Stage</text><text class="value" x="572" y="92">awareness</text>
+          <rect class="node input-node" x="714" y="34" width="210" height="82"/><text class="title" x="819" y="66">Page Archetype</text><text class="value" x="819" y="92">product_landing</text>
+          <rect class="node input-node" x="966" y="34" width="220" height="82"/><text class="title" x="1076" y="66">Business Features</text><text class="value" x="1076" y="92">pricing · purchase_entry</text>
+          <rect class="node config-node" x="1228" y="34" width="150" height="82"/><text class="title" x="1303" y="66">AuditProfile</text><text class="value" x="1303" y="92">mvp · 28 specs</text>
+          <path class="edge" d="M118 116 V154 Q118 174 138 180 L542 254"/><path class="edge" d="M340 116 V154 Q340 174 358 183 L578 254"/><path class="edge" d="M572 116 V165 Q572 187 594 203 L622 254"/><path class="edge" d="M819 116 V165 Q819 187 797 203 L752 254"/><path class="edge" d="M1076 116 V154 Q1076 174 1057 181 L790 254"/><path class="edge config" d="M1303 116 V154 Q1303 174 1283 181 L816 254"/>
+          <rect class="node config-node" x="1000" y="214" width="250" height="88"/><text class="title" x="1125" y="248">CheckSpec Registry</text><text class="value" x="1125" y="275">version · applies_when · executor</text>
+          <rect class="node config-node" x="1248" y="342" width="130" height="72"/><text class="title" x="1313" y="370">Standards</text><text class="value" x="1313" y="392">refs</text>
+          <path class="edge config" d="M1000 258 H835"/><path class="edge config reference" d="M1313 342 V320 Q1313 302 1295 290 L1250 270"/><text class="edge-label" x="1306" y="317">启动时校验引用</text>
+          <rect class="node builder-node" x="520" y="254" width="315" height="105"/><text class="builder-title" x="677" y="296">CheckPlan Builder</text><text class="builder-sub" x="677" y="326">仅筛选 scope = page 的规则</text>
+          <path class="edge output" d="M677 359 V408"/><rect class="node decision-node" x="502" y="408" width="350" height="82"/><text class="title" x="677" y="440">Applicable CheckSpecs</text><text class="value" x="677" y="466">selected / skipped · 保存原因</text>
+          <path class="edge output" d="M620 490 V514 Q620 530 604 536 L490 558"/><path class="edge output" d="M734 490 V514 Q734 530 750 536 L864 558"/>
+          <rect class="node checker-node" x="340" y="558" width="300" height="82"/><text class="title" x="490" y="590">Python Checkers</text><text class="value" x="490" y="616">deterministic · selected 5 / 7</text>
+          <rect class="node skill-node" x="714" y="558" width="300" height="82"/><text class="title" x="864" y="590">Model Check Skills</text><text class="value" x="864" y="616">SKILL.md · selected 6 / 10</text>
+          <path class="edge output" d="M490 640 V658 Q490 674 506 680 L620 702"/><path class="edge output" d="M864 640 V658 Q864 674 848 680 L734 702"/>
+          <rect class="node decision-node" x="502" y="702" width="350" height="72"/><text class="title" x="677" y="730">Execution Batches</text><text class="value" x="677" y="754">local · content · transaction</text>
+          <path class="edge final" d="M677 774 V784"/><rect class="node result-node" x="532" y="784" width="290" height="30"/><text class="title" x="677" y="806">Page CheckPlan · builder 1.2.0</text>
+        </svg>
+      </div>
+    </section>
+
+    <section class="surface" aria-labelledby="map-title">
+      <div class="surface-header"><div><p class="kicker">One registry · three builders</p><h2 id="map-title">从页面事实到三类执行计划</h2></div><p>颜色表示信息类型；箭头只表示数据和计划的流向。Page 路径保留原“单页计划细节”的所有关键节点。</p></div>
+      <div class="legend"><span style="--dot:var(--cyan)"><i></i>本次运行事实</span><span style="--dot:var(--violet)"><i></i>版本化配置</span><span style="--dot:var(--orange)"><i></i>确定性编译</span><span style="--dot:var(--gold)"><i></i>规则选择</span><span style="--dot:var(--green)"><i></i>CheckPlan 输出</span></div>
+      <div class="diagram">
+        <p class="lane-label">01 / PAGE · 主路径（完整展开）</p>
+        <section class="page-panel" aria-label="Page CheckPlan Builder 详细构建流程">
+          <div class="page-panel-head"><h3>Page CheckPlan Builder：单页计划细节</h3><p>只筛选 <code>scope = page</code> 的规则 · builder 1.2.0</p></div>
+          <div class="page-flow">
+            <article class="node fact"><span class="node-kicker">Runtime facts</span><strong>PageSnapshot + PageContext</strong><small>URL → PageMapNode → Snapshot → Context</small><div class="chips"><b>desktop</b><b>zh-CN</b><b>awareness</b><b>product_landing</b><b>pricing</b><b>purchase_entry</b><b>portal</b></div></article>
+            <article class="node config"><span class="node-kicker">Versioned config</span><div class="stack"><div><b>AuditProfile</b><span>mvp · 28 specs</span></div><div><b>CheckSpec Registry</b><span>scope · applies_when · executor</span></div><div><b>Standards</b><span>启动时校验引用</span></div></div></article>
+            <article class="node builder"><span class="node-kicker">Deterministic compile</span><strong>CheckPlanBuilder</strong><small>匹配 device / locale / stage<br>archetype / features</small></article>
+            <article class="node choice"><span class="node-kicker">Selection result</span><strong>Applicable CheckSpecs</strong><small>17 个 page candidates<br>selected / skipped<br>保存选择原因</small></article>
+          </div>
+          <div class="page-execution">
+            <article class="exec-node"><span class="node-kicker">Local</span><strong>Python Checkers</strong><small>7 candidates · 示例选中 5</small></article>
+            <article class="exec-node model"><span class="node-kicker">Semantic</span><strong>Model Check Skills</strong><small>10 candidates · 示例选中 6</small></article>
+            <article class="exec-node batch"><span class="node-kicker">Grouped execution</span><strong>Execution Batches</strong><small>local · content · transaction</small></article>
+            <article class="exec-node plan"><span class="node-kicker">Plan output</span><strong>Page CheckPlan</strong><small>selected / skipped · batches</small></article>
+          </div>
+        </section>
+
+        <div class="cross-area">
+          <p class="lane-label">02 / TRANSITION + JOURNEY · 跨页面分支</p>
+          <div class="cross-grid">
+            <section class="cross-panel transition" aria-label="Transition CheckPlan Builder 流程"><div class="cross-head"><h3>Transition CheckPlan Builder</h3><small>scope = transition · v1.0.0</small></div><div class="cross-flow"><article class="cross-node fact"><strong>TransitionTrace</strong><small>起点快照 · ActionRecord · 终点快照</small></article><article class="cross-node builder"><strong>筛选 transition spec</strong><small>transition_id + Profile<br>匹配 transition_ids</small></article><article class="cross-node out"><strong>Transition CheckPlan</strong><small>3 specs · deterministic batch</small></article></div></section>
+            <section class="cross-panel journey" aria-label="Journey CheckPlan Builder 流程"><div class="cross-head"><h3>Journey CheckPlan Builder</h3><small>scope = journey · v1.0.0</small></div><div class="cross-flow"><article class="cross-node fact"><strong>Journey Evidence</strong><small>多节点事实 · comparison 关系</small></article><article class="cross-node builder"><strong>生成 CheckInvocation</strong><small>journey_id · mode · min nodes</small></article><article class="cross-node out"><strong>Journey CheckPlan</strong><small>8 specs · invocation + model batch</small></article></div></section>
+          </div>
+        </div>
+        <div class="notes"><div class="note"><b>共同点</b><span>三个 Builder 共享 AuditProfile 和 CheckSpec Registry，但不会处理非本 Scope 的规则。</span></div><div class="note"><b>Page 的角色</b><span>每个页面先生成自己的 Page CheckPlan 和 Page 结果，为后续 Transition / Journey 提供事实。</span></div><div class="note"><b>跨页的角色</b><span>Transition 检查一次受控跳转；Journey 根据多个节点事实构建跨阶段检查实例。</span></div></div>
+      </div>
+    </section>
+    <p class="footer">示例上下文：awareness / product_landing。实线流程为当前代码的计划构建关系；当前 OpenJiuwen Workflow 已用于 Page 审计，Transition / Journey 由 MetaPQP 应用层运行器执行。</p>
+  </main>
+</body>
+</html>

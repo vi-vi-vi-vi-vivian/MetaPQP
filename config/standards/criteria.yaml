@@ -76,7 +76,7 @@ criteria:
     title: 页面应具有描述主题的 Title
   - id: metapqp-internal/image-alt
     source_id: metapqp-internal
-    title: 信息图片和图像控件应具有可访问名称
+    title: 可点击图片控件（如 Logo）应具有可访问名称
   - id: metapqp-internal/mobile-horizontal-overflow
     source_id: metapqp-internal
     title: 移动端页面不应出现意外横向溢出
@@ -98,3 +98,48 @@ criteria:
   - id: metapqp-internal/terminology-clarity
     source_id: metapqp-internal
     title: 专业术语和计费名词应清晰可理解
+  - id: metapqp-internal/visible-content-occlusion
+    source_id: metapqp-internal
+    title: 关键可见内容和操作控件不应被其他界面元素意外遮挡
+  - id: metapqp-internal/text-clipping-and-truncation
+    source_id: metapqp-internal
+    title: 关键文本不应因布局错误而被裁切或不可读
+  - id: metapqp-internal/responsive-visual-integrity
+    source_id: metapqp-internal
+    title: 移动端响应式布局不应出现明显错位、重叠或破版
+  - id: metapqp-internal/journey-transition-reachability
+    source_id: metapqp-internal
+    title: 已登记的安全跳转应能到达预期页面
+  - id: metapqp-internal/entry-and-resume-continuity
+    source_id: metapqp-internal
+    title: 登录或跨站跳转后应能恢复到预期业务入口
+  - id: metapqp-internal/transaction-context-continuity
+    source_id: metapqp-internal
+    title: 跳转前后的产品和交易上下文应保持连续
+  - id: metapqp-internal/cross-stage-product-identity-consistency
+    source_id: metapqp-internal
+    title: 多个旅程页面对同一产品的身份和定位不应产生实质冲突
+  - id: metapqp-internal/cross-stage-commercial-terms-consistency
+    source_id: metapqp-internal
+    title: 多个旅程页面的商业条件不应产生影响决策的实质冲突
+  - id: metapqp-internal/cross-stage-offering-consistency
+    source_id: metapqp-internal
+    title: 多个旅程页面的可选内容、规格和权益应能够对应
+  - id: metapqp-internal/cross-stage-action-expectation-continuity
+    source_id: metapqp-internal
+    title: 操作入口建立的预期应与后续页面内容保持连续
+  - id: metapqp-internal/cross-stage-terminology-consistency
+    source_id: metapqp-internal
+    title: 多个旅程页面的术语和概念应保持可理解的连续性
+  - id: metapqp-internal/cross-stage-selection-continuity
+    source_id: metapqp-internal
+    title: 默认项和用户选择状态应在旅程中保持连续
+  - id: metapqp-internal/cross-stage-decision-guidance-continuity
+    source_id: metapqp-internal
+    title: 影响选择的推荐与比较线索应在连续决策页面中保持可识别
+  - id: metapqp-internal/cross-stage-lifecycle-state-consistency
+    source_id: metapqp-internal
+    title: 同一产品或资源的生命周期状态应跨页面同步
+  - id: metapqp-internal/cross-stage-commitment-policy-consistency
+    source_id: metapqp-internal
+    title: 持续承诺、变更和退出规则不应跨页面冲突

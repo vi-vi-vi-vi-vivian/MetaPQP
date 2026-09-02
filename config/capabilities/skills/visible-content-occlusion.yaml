@@ -1,0 +1,6 @@
+id: visible-content-occlusion
+version: 1.0.0
+kind: skill
+modality: vision
+supported_scopes: [page]
+implementation: {skill_id: visible-content-occlusion}

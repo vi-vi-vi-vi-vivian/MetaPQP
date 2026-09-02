@@ -148,7 +148,7 @@ flowchart TB
 
 单页运行目录必须保留 `product`、稳定语义化 `page_id`、`device` 和 `locale` 四个辨识维度，不能再把同一产品的感知页、购买页或 Desktop/Mobile 结果直接混放在产品目录下。历史产物继续保留，但新运行统一使用 `output/{source}/{product}/{page_id}/{device}/{locale}/{run_id}`。
 
-单 URL 检查默认展开 `devices=[desktop,mobile] × locales=[zh-CN,en-US]` 四种变体。调用方显式提供 `device` 或 `locale` 时，该字段作为矩阵过滤条件；同时提供两者时退化为单变体检查。每个变体必须独立采集和执行，不能跨设备或跨语言复用 Snapshot。
+单 URL 检查先解析 `page_surface` 再展开变体。`portal` 的展示语言由 URL 决定，默认只展开 `devices=[desktop,mobile]`；国际站必须提供真实的 `/intl/en-us/` URL，不根据浏览器 Locale 构造伪英文页面。`console` 默认展开 `device=[desktop] × locales=[zh-CN,en-US]`，不执行移动端检查。调用方显式提供 `device`、`locale` 或 `page_surface` 时作为覆盖条件；每个实际变体必须独立采集和执行，不能跨设备或跨语言复用 Snapshot。
 
 保留现有报告中的问题汇总、优先处理清单、截图定位、详细检查和完整问题清单，但默认详情组织从“阶段/检查项”调整为“页面”。`Finding` 和 `CheckRun` 各只完整序列化一次，`PageAssessment` 与轻量 `sections` 通过 ID 引用它们；`stage_analysis` 和 `cross_stage_checks` 只在 Journey Run 中生成。`checkplan.json` 是本次计划的独立物化结果，便于回放、比较和调试；`audit.json` 仍保留同一计划的内嵌投影，保证单文件消费者可用。完整输出契约见 `docs/0821/local-mvp-detailed-design.md` 第 10 节。
 
@@ -244,6 +244,8 @@ Baseline Collector
 | Checker / Check Skill | 基于 CheckSpec 和证据判断页面是否满足规则 |
 
 Baseline Collector 只回答“页面上观察到了什么”，不负责页面分类、CheckSpec 选择、体验判断、严重度计算或 Finding 生成。
+
+基础证据不得通过元素数、正文字符数、图片数或事实数的固定前缀上限静默裁剪。采集或传输必须分批完成；如果某类证据因异常未完整采集，Snapshot/Projection 必须显式标记覆盖不完整，依赖它的 CheckSpec 不能判定为通过。
 
 #### 5.1.2 输入契约
 

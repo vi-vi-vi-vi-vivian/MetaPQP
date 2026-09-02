@@ -1,0 +1,16 @@
+id: journey-transition-reachability
+version: 1.0.0
+title: 安全跳转应到达预期页面
+description: 执行已登记动作后，应命中 Transition 声明的终点 PageMapNode。
+scope: transition
+tags: [journey, transition, navigation]
+applies_when:
+  transition_ids: [tokenplan-awareness-to-purchase]
+required_evidence: [transition_trace, end_node_resolution]
+executor: {type: deterministic, capability_id: journey-transition-reachability-checker}
+default_severity: p1
+standard_refs:
+  - criterion_id: metapqp-internal/journey-transition-reachability
+    relation: implements
+  - criterion_id: nielsen-heuristics/H2
+    relation: supports

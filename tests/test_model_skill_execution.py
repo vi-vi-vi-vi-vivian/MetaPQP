@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from portal_audit.application.ports.model import ModelCompletion
+from portal_audit.application.ports.model import ModelCompletion, TextContent
 from portal_audit.domain.models import (
     CheckExecutorRef,
     CheckSpec,
@@ -23,9 +23,9 @@ class FakeModel:
     def __init__(self):
         self.user = ""
 
-    async def complete_json(self, *, system, user, schema=None):
-        del system, schema
-        self.user = user
+    async def complete_json(self, request):
+        assert isinstance(request.content[0], TextContent)
+        self.user = request.content[0].text
         return ModelCompletion(
             content={
                 "status": "fail",
@@ -36,6 +36,7 @@ class FakeModel:
                 "title": "页面存在重复词",
                 "suggestion": "删除重复的‘后’",
             },
+            provider="fake",
             model="test-model",
             provider_request_id="request-1",
             prompt_tokens=900,

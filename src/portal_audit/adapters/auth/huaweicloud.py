@@ -9,6 +9,7 @@ from urllib.parse import urlparse
 
 from playwright.async_api import Browser, Page, TimeoutError, async_playwright
 
+from portal_audit.adapters.browser.launcher import launch_chromium
 from portal_audit.application.ports.auth import BrowserAuthSession
 from portal_audit.domain.models import (
     AuthenticationSummary,
@@ -71,7 +72,8 @@ class HuaweiCloudAuthProvider:
             return self._anonymous(AuthStatus.FAILED, "account_disabled")
 
         async with async_playwright() as playwright:
-            browser = await playwright.chromium.launch(
+            browser = await launch_chromium(
+                playwright.chromium,
                 headless=self.headless,
                 args=["--disable-blink-features=AutomationControlled"],
             )

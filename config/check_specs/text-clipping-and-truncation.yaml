@@ -1,0 +1,16 @@
+id: text-clipping-and-truncation
+version: 1.0.0
+title: 移动端关键文本不应被异常裁切
+description: 检查标题、价格、说明和按钮文字是否因响应式布局错误而缺字、截断或不可读；正常省略号和设计性行数限制不报告。
+tags: [mobile, portal, visual, content, responsive]
+applies_when: {devices: [mobile], page_surfaces: [portal]}
+required_evidence: [visual_viewport, visual_overview, visual_tiles, element_overflow_metrics]
+executor: {type: model_skill, capability_id: text-clipping-and-truncation}
+default_severity: p1
+standard_refs:
+  - criterion_id: metapqp-internal/text-clipping-and-truncation
+    relation: implements
+  - criterion_id: wcag-2.2/1.4.10
+    relation: partial_coverage
+    notes: 仅检查指定移动端视口中的可见裁切，不代表完整 WCAG 2.2 Reflow 合规。
+

@@ -1,11 +1,11 @@
 id: image-alt
-version: 1.2.0
-title: 信息图片和图像控件应具有可访问名称
-description: 信息图片应提供等价文本，装饰图片应使用空 Alt；图标旁已有等价文本时不重复报错，图片用途不明确时转人工确认。
+version: 1.3.0
+title: 可点击图片控件（如 Logo）应具有可访问名称
+description: 仅在图片独立承担点击操作且整个控件没有可访问名称时形成问题；已有文字、父控件名称或等价上下文时不报，普通图片用途不明确时只转人工确认。
 tags: [content, accessibility, image]
 applies_when: {}
 required_evidence: [evidence_elements]
-executor: {type: deterministic, capability_id: image-alt-checker, version: 1.1.0}
+executor: {type: deterministic, capability_id: image-alt-checker, version: 1.2.0}
 default_severity: p2
 standard_refs:
   - criterion_id: metapqp-internal/image-alt

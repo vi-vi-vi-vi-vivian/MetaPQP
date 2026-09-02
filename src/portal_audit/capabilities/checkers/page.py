@@ -105,6 +105,8 @@ class RuntimeErrorsChecker:
             for item in snapshot.network_errors
             if "ERR_ABORTED" not in str(item.get("error", ""))
             and "networkidle timeout" not in str(item.get("error", ""))
+            and "domcontentloaded timeout" not in str(item.get("error", ""))
+            and "navigation retry timeout" not in str(item.get("error", ""))
         ]
         ignored_network_errors = len(snapshot.network_errors) - len(actionable_network_errors)
         confirmed_critical = [
@@ -165,15 +167,20 @@ class BrokenLinksChecker:
         unique_links = list(Counter(links))[: self.max_links]
         broken: list[str] = []
         protected: list[str] = []
+        transient: list[str] = []
         unverified: list[str] = []
         async with httpx.AsyncClient(follow_redirects=True, timeout=10) as client:
             for url in unique_links:
                 try:
                     response = await client.head(url)
-                    if response.status_code in {403, 405, 418, 429}:
+                    # HEAD is only an optimization. Some valid sites do not implement it
+                    # consistently and return 4xx while a normal navigation succeeds.
+                    if response.status_code >= 400:
                         response = await client.get(url, headers={"Range": "bytes=0-0"})
                     if response.status_code in {401, 403, 418, 429}:
                         protected.append(f"{response.status_code} {url}")
+                    elif response.status_code >= 500:
+                        transient.append(f"{response.status_code} {url}")
                     elif response.status_code >= 400:
                         broken.append(f"{response.status_code} {url}")
                 except httpx.HTTPError as exc:
@@ -182,7 +189,7 @@ class BrokenLinksChecker:
             CheckStatus.FAIL
             if broken
             else CheckStatus.NEEDS_VERIFICATION
-            if protected or unverified
+            if protected or transient or unverified
             else CheckStatus.PASS
         )
         broken_urls = {
@@ -203,16 +210,17 @@ class BrokenLinksChecker:
             reason=(
                 f"checked_links={len(unique_links)}, broken_links={len(broken)}, "
                 f"protected_or_rate_limited={len(protected)}, "
+                f"transient_server_errors={len(transient)}, "
                 f"unverified_links={len(unverified)}"
             ),
             severity=spec.default_severity,
-            evidence=(broken if broken else protected + unverified)[:10],
+            evidence=(broken if broken else protected + transient + unverified)[:10],
             locations=locations,
             suggestion=(
                 "修复或移除已确认失效的链接，并确认正确目标地址。"
                 if broken
                 else "在浏览器或具备相应权限的环境中重新验证这些链接。"
-                if protected or unverified
+                if protected or transient or unverified
                 else None
             ),
             executor_id=self.id,
@@ -261,7 +269,9 @@ class ImageAltChecker:
             evidence=[item.selector or item.element_ref for item in evidence_items[:10]],
             locations=[element_location(item) for item in evidence_items[:10]],
             suggestion=(
-                "为无可访问名称的图像控件补充准确名称。"
+                "如果这是可点击 Logo，为图片添加准确 Alt（如 alt=\"智果园\"），"
+                "或为父链接添加动作明确的 aria-label（如 aria-label=\"智果园首页\"）；"
+                "二者具备一个即可。其他图片控件按实际动作命名。"
                 if confirmed_failures
                 else "确认图片用途：信息图片提供等价文本，装饰图片使用空 Alt。"
                 if ambiguous

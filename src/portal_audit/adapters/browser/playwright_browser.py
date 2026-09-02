@@ -4,10 +4,13 @@ from __future__ import annotations
 
 from urllib.parse import urljoin
 
+from playwright.async_api import Error as PlaywrightError
 from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 from playwright.async_api import async_playwright
 
 from portal_audit.adapters.artifacts.local_store import LocalArtifactStore
+from portal_audit.adapters.browser.launcher import launch_chromium
+from portal_audit.adapters.browser.visual_evidence import VisualEvidenceBuilder
 from portal_audit.application.ports.auth import BrowserAuthSession
 from portal_audit.domain.models import (
     ElementLocation,
@@ -15,6 +18,7 @@ from portal_audit.domain.models import (
     InteractiveElement,
     MobileLayoutEvidence,
     PageSnapshot,
+    PageSurface,
     PageTarget,
 )
 
@@ -27,11 +31,19 @@ MOBILE_USER_AGENT = (
 
 class PlaywrightBrowser:
     def __init__(
-        self, store: LocalArtifactStore, *, headless: bool = True, timeout_ms: int = 60_000
+        self,
+        store: LocalArtifactStore,
+        *,
+        headless: bool = True,
+        timeout_ms: int = 60_000,
+        visual_audit_enabled: bool = True,
+        visual_audit_max_tiles: int | None = None,
     ):
         self.store = store
         self.headless = headless
         self.timeout_ms = timeout_ms
+        self.visual_audit_enabled = visual_audit_enabled
+        self.visual_evidence_builder = VisualEvidenceBuilder(max_tiles=visual_audit_max_tiles)
 
     async def capture(
         self,
@@ -49,7 +61,7 @@ class PlaywrightBrowser:
         )
 
         async with async_playwright() as playwright:
-            browser = await playwright.chromium.launch(headless=self.headless)
+            browser = await launch_chromium(playwright.chromium, headless=self.headless)
             context_options = self._context_options(
                 target,
                 viewport,
@@ -58,6 +70,7 @@ class PlaywrightBrowser:
             context = await browser.new_context(**context_options)
             page = await context.new_page()
             page.set_default_timeout(self.timeout_ms)
+            document_responses: list[int] = []
 
             page.on(
                 "console",
@@ -76,12 +89,25 @@ class PlaywrightBrowser:
                     }
                 ),
             )
+            page.on(
+                "response",
+                lambda response: (
+                    document_responses.append(response.status)
+                    if response.request.is_navigation_request()
+                    and response.frame == page.main_frame
+                    else None
+                ),
+            )
 
-            response = await page.goto(
-                target.url, wait_until="domcontentloaded", timeout=self.timeout_ms
+            response = await self._navigate(
+                page,
+                target.url,
+                network_errors,
             )
             if response is not None:
                 document_status = response.status
+            elif document_responses:
+                document_status = document_responses[-1]
             try:
                 await page.wait_for_load_state("networkidle", timeout=min(self.timeout_ms, 15_000))
             except PlaywrightTimeoutError:
@@ -147,7 +173,7 @@ class PlaywrightBrowser:
                             role: e.getAttribute('role'),
                             text: (e.innerText || e.getAttribute('aria-label') ||
                                 e.getAttribute('alt') || e.getAttribute('placeholder') ||
-                                e.value || '').trim().replace(/\\s+/g, ' ').slice(0, 500),
+                                e.value || '').trim().replace(/\\s+/g, ' '),
                             href: e.getAttribute('href'),
                             element_id: e.id || null,
                             selector: cssPath(e),
@@ -161,14 +187,27 @@ class PlaywrightBrowser:
                             has_alt: e.hasAttribute('alt'),
                             accessible_name: (
                                 e.getAttribute('aria-label') || labelledBy || ancestorText
-                            ).trim().replace(/\\s+/g, ' ').slice(0, 300),
-                            surrounding_text: parentText.replace(/\\s+/g, ' ').slice(0, 300),
+                            ).trim().replace(/\\s+/g, ' '),
+                            surrounding_text: parentText.replace(/\\s+/g, ' '),
                             interactive_ancestor: Boolean(interactiveAncestor),
                             enabled: !e.disabled && e.getAttribute('aria-disabled') !== 'true',
+                            client_width: e.clientWidth,
+                            scroll_width: e.scrollWidth,
+                            client_height: e.clientHeight,
+                            scroll_height: e.scrollHeight,
+                            computed_style: {
+                                overflow_x: style.overflowX,
+                                overflow_y: style.overflowY,
+                                text_overflow: style.textOverflow,
+                                white_space: style.whiteSpace,
+                                webkit_line_clamp: style.webkitLineClamp,
+                                position: style.position,
+                                z_index: style.zIndex
+                            },
                             interactive: e.matches(interactiveSelector),
                             visible
                         };
-                    }).filter(item => item.visible).slice(0, 1200);
+                    }).filter(item => item.visible);
                 }"""
             )
             final_url = page.url
@@ -230,6 +269,8 @@ class PlaywrightBrowser:
             screenshot_path = run_dir / "screenshots" / "page-full.png"
             screenshot_path.parent.mkdir(parents=True, exist_ok=True)
             await page.screenshot(path=str(screenshot_path), full_page=True)
+            viewport_path = run_dir / "screenshots" / "page-viewport.png"
+            await page.screenshot(path=str(viewport_path), full_page=False)
 
             artifacts = [
                 self.store.write_text(run_id, "artifacts/page.html", html, "text/html"),
@@ -264,6 +305,19 @@ class PlaywrightBrowser:
                     media_type="image/png",
                 )
             )
+            if (
+                self.visual_audit_enabled
+                and target.device == "mobile"
+                and target.page_surface == PageSurface.PORTAL
+            ):
+                artifacts.extend(
+                    self.visual_evidence_builder.build(
+                        full_page_path=screenshot_path,
+                        viewport_path=viewport_path,
+                        document_size=document_size,
+                        output_dir=screenshot_path.parent,
+                    )
+                )
             await context.close()
             await browser.close()
 
@@ -275,7 +329,7 @@ class PlaywrightBrowser:
             http_status=document_status,
             viewport=viewport,
             document_size=document_size,
-            body_text=body_text[:100_000],
+            body_text=body_text,
             headings=headings,
             interactive_elements=interactive,
             evidence_elements=evidence_elements,
@@ -284,6 +338,71 @@ class PlaywrightBrowser:
             mobile_layout=mobile_layout,
             artifacts=artifacts,
         )
+
+    async def _navigate(
+        self,
+        page,
+        url: str,
+        network_errors: list[dict[str, str | int | None]],
+    ):
+        try:
+            return await page.goto(
+                url,
+                wait_until="domcontentloaded",
+                timeout=self.timeout_ms,
+            )
+        except PlaywrightTimeoutError as first_error:
+            if await self._has_usable_document(page):
+                network_errors.append(
+                    {
+                        "url": page.url,
+                        "method": "DOCUMENT",
+                        "error": (
+                            "domcontentloaded timeout; baseline continued because body is usable"
+                        ),
+                    }
+                )
+                return None
+            try:
+                response = await page.goto(
+                    url,
+                    wait_until="commit",
+                    timeout=min(self.timeout_ms, 30_000),
+                )
+            except PlaywrightTimeoutError:
+                if await self._has_usable_document(page):
+                    network_errors.append(
+                        {
+                            "url": page.url,
+                            "method": "DOCUMENT",
+                            "error": (
+                                "navigation retry timeout; baseline continued because body is usable"
+                            ),
+                        }
+                    )
+                    return None
+                raise first_error
+            try:
+                await page.wait_for_load_state("domcontentloaded", timeout=10_000)
+            except PlaywrightTimeoutError:
+                network_errors.append(
+                    {
+                        "url": page.url,
+                        "method": "DOCUMENT",
+                        "error": "domcontentloaded timeout after commit; baseline continued",
+                    }
+                )
+            return response
+
+    @staticmethod
+    async def _has_usable_document(page) -> bool:
+        try:
+            body = page.locator("body")
+            return await body.count() > 0 and bool(
+                (await body.inner_text(timeout=3_000)).strip()
+            )
+        except (PlaywrightError, PlaywrightTimeoutError):
+            return False
 
     @staticmethod
     def _context_options(
@@ -334,7 +453,7 @@ class PlaywrightBrowser:
                 return false;
               };
               const textOf = el => (el.innerText || el.textContent ||
-                el.getAttribute('aria-label') || '').trim().replace(/\s+/g, ' ').slice(0, 160);
+                el.getAttribute('aria-label') || '').trim().replace(/\s+/g, ' ');
               const cssPath = element => {
                 if (element.id) return `#${CSS.escape(element.id)}`;
                 const parts = [];
@@ -359,7 +478,6 @@ class PlaywrightBrowser:
                 .filter(el => !el.parentElement || el.parentElement === document.body ||
                   el.parentElement === document.documentElement || !outside(el.parentElement) ||
                   inIntentionalScroller(el.parentElement))
-                .slice(0, 50)
                 .map((el, index) => {
                   const r = el.getBoundingClientRect();
                   return {

@@ -1,0 +1,16 @@
+id: entry-and-resume-continuity
+version: 1.0.0
+title: 登录后应恢复到预期业务入口
+description: 跨站或登录跳转后，不应停留在登录页、错误页或无关首页。
+scope: transition
+tags: [journey, transition, authentication]
+applies_when:
+  transition_ids: [tokenplan-awareness-to-purchase]
+required_evidence: [transition_trace, end_snapshot]
+executor: {type: deterministic, capability_id: entry-and-resume-continuity-checker}
+default_severity: p1
+standard_refs:
+  - criterion_id: metapqp-internal/entry-and-resume-continuity
+    relation: implements
+  - criterion_id: nielsen-heuristics/H7
+    relation: supports

@@ -1,0 +1,19 @@
+id: production-readonly
+version: 1.0.0
+title: 生产环境只读与确认页安全策略
+allowed_risk_levels: [read_only, local_state, confirmation_only]
+max_transition_depth: 1
+prohibited_action_terms:
+  - 确认购买
+  - 提交订单
+  - 立即支付
+  - 确认支付
+  - 确认续费
+  - 确认退订
+  - 删除资源
+prohibited_url_terms:
+  - /order/submit
+  - /payment/submit
+  - /renew/submit
+  - /unsubscribe/confirm
+  - /resource/delete

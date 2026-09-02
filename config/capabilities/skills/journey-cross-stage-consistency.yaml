@@ -1,0 +1,6 @@
+id: journey-cross-stage-consistency
+version: 1.0.0
+kind: skill
+modality: text
+supported_scopes: [journey]
+implementation: {skill_id: journey-cross-stage-consistency}

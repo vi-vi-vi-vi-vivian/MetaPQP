@@ -1,0 +1,6 @@
+id: text-clipping-and-truncation
+version: 1.0.0
+kind: skill
+modality: vision
+supported_scopes: [page]
+implementation: {skill_id: text-clipping-and-truncation}

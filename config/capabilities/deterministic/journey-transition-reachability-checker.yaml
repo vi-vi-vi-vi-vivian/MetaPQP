@@ -1,0 +1,6 @@
+id: journey-transition-reachability-checker
+version: 1.0.0
+kind: deterministic
+supported_scopes: [transition]
+required_evidence: [transition_trace, end_node_resolution]
+implementation: {entrypoint: "portal_audit.capabilities.checkers.transition:JourneyTransitionReachabilityChecker"}

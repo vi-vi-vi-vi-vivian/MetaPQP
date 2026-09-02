@@ -1,0 +1,19 @@
+id: tokenplan-awareness-to-purchase
+version: 1.0.0
+title: 从 TokenPlan 感知页进入购买页
+from: tokenplan-awareness
+to: tokenplan-purchase
+action:
+  type: click
+  target:
+    role: link
+    name: 立即订阅
+    exact: true
+    occurrence: 0
+    href_contains: resourcePlanManagement
+end_condition:
+  page_map_node: tokenplan-purchase
+  url_contains: /model-studio/resourcePlanManagement
+risk_level: confirmation_only
+safe_stop: purchase_page_loaded
+auto_run: false

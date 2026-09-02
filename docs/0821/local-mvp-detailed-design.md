@@ -56,9 +56,9 @@ flowchart LR
 
     B --> Browser["Playwright Browser Adapter"]
     C --> Detectors["Pluggable Context Detectors"]
-    P --> Config["Versioned YAML Assets<br/>AuditProfile・CheckSpec・ExecutionPolicy"]
-    E --> Checkers["Deterministic Checkers"]
-    E --> Skills["Atomic Model Check Skills"]
+    P --> Config["Versioned YAML Assets<br/>AuditProfile・CheckSpec・Capability Manifest・ExecutionPolicy"]
+    E --> Checkers["Manifest-registered Python Checkers"]
+    E --> Skills["Manifest-registered Text / Visual Skills"]
     E --> Batch["Single / Grouped Model Executors"]
 
     App --> DB[("SQLite")]
@@ -76,6 +76,8 @@ flowchart LR
 - Domain 与 Application 中不得导入 OpenJiuwen、Playwright、Dashboard 或 SQLite 的具体类型。
 - `CheckPlan` 由版本化配置和确定性逻辑编译，不由自由 Agent 临场决定。
 - `CheckPlan.execution_batches` 固化本次 `local`、`model_single`、`model_batch` 调用拓扑；请求级 `single|grouped` 只决定如何生成这些批次。批调用只优化调度，不合并 CheckSpec、CheckRun 或 Finding 身份。
+- `CheckSpec` 只定义业务规则；它通过 `capability_id` 引用 Capability manifest。manifest 再绑定 Python checker 或 Text / Visual Skill，并声明 scope、证据契约及模态。三种 scope 共用此调用方式。
+- `Journey.execution_mode` 通过 Journey Executor manifest 解析；当前仅注册受监督的 `sequential`，新执行模式可作为独立实现与 manifest 加入，不修改公共 Journey API。
 - 浏览器动作必须先经过 Action Guard；旅程执行也不能绕过它。
 - MCP 只能通过稳定 Port 提供或获取能力，不能绕过应用层直接操作领域对象、浏览器或数据库。
 
@@ -101,19 +103,20 @@ load_request
 
 ### 4.1 模型接入
 
-MVP 通过 OpenRouter 的 OpenAI-compatible Chat Completions 接口调用指定模型。具体 URL、API Key 和模型名只通过环境变量注入：
+应用层只识别 `default-text` 与 `default-vision` 两个模型 Profile。Provider、URL、API Key 和模型名只通过环境变量注入；默认分别绑定 OpenRouter 和 Gemini，也支持将任一 Profile 指向 OpenAI-compatible 内网接口：
 
 ```text
-OPENROUTER_BASE_URL
-OPENROUTER_API_KEY
-OPENROUTER_MODEL
+TEXT_MODEL_PROVIDER / TEXT_MODEL_BASE_URL / TEXT_MODEL_API_KEY / TEXT_MODEL_NAME
+VISION_MODEL_PROVIDER / VISION_MODEL_BASE_URL / VISION_MODEL_API_KEY / VISION_MODEL_NAME
 ```
 
-仓库只提交 `.env.example` 的空占位符，不提交真实凭据。`OpenRouterModelAdapter` 实现应用层 `ModelPort`，Model Check Skill 和 Context Skill 不直接读取环境变量或调用 HTTP。
+仓库只提交 `.env.example` 的空占位符，不提交真实凭据。Provider Adapter 实现应用层 `ModelPort`，Model Check Skill 和 Context Skill 不直接读取环境变量或调用 HTTP。Page 内容/交易检查和 Journey 跨阶段语义检查使用 `default-text`；只有实际携带截图的视觉 CheckSpec 使用 `default-vision`。
 
 `ModelPort.complete_json` 返回结构化内容以及 Provider 实际返回的模型名、request ID、Prompt/Completion/Total Token、客户端观测时延和其他 usage 字段。`OpenRouterModelAdapter` 不估算或硬编码费用；Provider 返回的 `usage.cost` 等字段原样进入 `usage_details`。应用层将每次成功调用保存为 `ModelCallRecord`，并在 `audit.json -> run.model_execution` 聚合调用次数、Token、时延和费用。
 
-模型 Prompt 不直接序列化完整 `PageSnapshot`。`ModelEvidenceCompactor` 仅发送可见正文和按页面顺序排列的语义元素，保留 tag、role、text、href、Alt 状态、enabled、interactive 与稳定 `element_ref`；selector 和 bounds 留在本地。模型结果只能引用已提供的 `element_ref`，执行器再从 Snapshot 恢复浏览器定位信息。当前适配器不把截图作为多模态输入，视觉像素判断不属于已实现的模型能力。
+模型 Prompt 不直接序列化浏览器私有状态。证据投影保留完整可见正文、标题和按页面顺序排列的语义元素，包括 tag、role、text、href、Alt 状态、enabled、interactive 与稳定 `element_ref`；selector 留在本地。不得使用“前 N 个元素、字符或事实”的静默截断。投影附带 source/included counts、capabilities 和 truncated 状态，`EvidenceContractValidator` 在调用前校验 CheckSpec 的 `required_evidence`。
+
+视觉长页面通过分批传输解决 Provider 单次图片限制，而不是缩小检查范围。视觉证据从顶到底连续切片，按 Provider 单次图片能力分批调用，最后按 CheckSpec 归并；所有切片都被处理后才形成整页结论。文本投影当前发送完整语义证据，超出 Provider 上下文时必须明确失败并降低覆盖率，不能回退为前缀截断；后续的文本分块还必须为页面内部一致性保留跨块比较阶段。模型返回的 `element_ref` 再从完整 Snapshot 恢复 selector、bounds 和报告截图位置。
 
 ### 4.2 MCP 预留边界
 
@@ -138,8 +141,8 @@ MCP Adapter 必须支持未配置时关闭、连接超时、能力白名单、�
 
 | 模型 | 最小职责 |
 |---|---|
-| `PageAuditRequest` | URL、设备、语言、可选页面/旅程上下文、配置版本 |
-| `PageTarget` | 本次运行的确定事实与约束 |
+| `PageAuditRequest` | URL、`page_surface`、设备、语言、可选页面/旅程上下文、配置版本 |
+| `PageTarget` | 本次运行的 URL、`portal/console` 承载面及设备语言约束 |
 | `PageSnapshot` | DOM、截图、交互元素、导航、Console、Network 和轨迹引用 |
 | `PageContext` | 旅程阶段、页面原型、关键业务特征和带证据的置信度 |
 | `CheckSpec` | 规则身份、适用条件、证据要求、执行器和判定标准 |
@@ -164,7 +167,7 @@ MCP Adapter 必须支持未配置时关闭、连接超时、能力白名单、�
 
 七阶段的唯一配置事实位于 `config/journey_templates/cloud-product-lifecycle.yaml`，顺序为 `awareness`（感知）、`purchase`（购买）、`order`（下单）、`payment`（支付）、`usage`（使用）、`renewal`（续费）、`unsubscribe`（退订）。产品 URL 与稳定 `page_id` 由 `config/product_journey_bindings/*.yaml` 绑定到阶段。
 
-Scenario 声明业务路径、Persona、认证要求和执行矩阵。默认矩阵为 `devices: [desktop, mobile]` 与 `locales: [zh-CN, en-US]`；Runner 必须把笛卡尔积展开为四个彼此独立的 PageTarget/Snapshot，不能跨设备或跨语言复用证据。请求显式参数作为矩阵过滤条件，并优先于 Scenario；Scenario 优先于 Product Binding 默认值。当前单页 CLI 已实现同样的矩阵展开；Journey Runner 消费 Scenario 并展开矩阵仍属于后续实现。
+Scenario 声明业务路径、Persona、认证要求和按 `page_surface` 区分的执行矩阵。`portal` 默认使用 URL 所表达的单一语言并展开 Desktop/Mobile；`console` 默认只使用 Desktop 并展开 zh-CN/en-US。Runner 不能为门户 URL 仅靠浏览器 Locale 生成另一语言，也不能默认对 Console 执行 Mobile。请求显式参数作为矩阵过滤条件，并优先于 Scenario；Scenario 优先于 Product Binding 默认值。当前单页 CLI 已实现相同策略；Journey Runner 消费 Scenario 并展开矩阵仍属于后续实现。
 
 ## 6. CheckPlan 如何动态拼装
 
@@ -257,7 +260,7 @@ Builder 在 grouped 模式下必须保证所有已选模型 CheckSpec 恰好属�
 2. `broken-links`：有限数量的页面可见 HTTP 链接是否失效；
 3. `runtime-errors`：Console 与关键 Network 是否存在运行错误；
 4. `document-structure`：Title、H1 和标题结构是否满足规则；
-5. `image-alt`：可见图片是否声明 Alt 属性。
+5. `image-alt`：独立承担点击操作的图片控件是否具有可访问名称；已有文字、父控件名称或等价上下文时通过，普通图片用途不明确时只转人工确认。该检查仅部分覆盖 WCAG 2.2 1.1.1。
 
 Mobile 请求额外启用两条设备限定的本地规则：
 

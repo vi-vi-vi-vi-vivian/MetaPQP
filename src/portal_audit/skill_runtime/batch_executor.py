@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from collections import Counter
 
-from portal_audit.application.ports.model import ModelPort
+from portal_audit.application.ports.model import ModelPort, ModelRequest, TextContent
 from portal_audit.domain.models import (
     CheckExecutionResult,
     CheckRun,
@@ -16,7 +16,10 @@ from portal_audit.domain.models import (
     PageSnapshot,
     Severity,
 )
-from portal_audit.skill_runtime.evidence_compactor import ModelEvidenceCompactor
+from portal_audit.skill_runtime.evidence_compactor import (
+    EvidenceContractValidator,
+    ModelEvidenceCompactor,
+)
 from portal_audit.skill_runtime.loader import SkillLoader
 
 
@@ -68,10 +71,12 @@ class BatchModelSkillExecutor:
         loader: SkillLoader,
         model: ModelPort,
         evidence_compactor: ModelEvidenceCompactor | None = None,
+        evidence_validator: EvidenceContractValidator | None = None,
     ):
         self.loader = loader
         self.model = model
         self.evidence_compactor = evidence_compactor or ModelEvidenceCompactor()
+        self.evidence_validator = evidence_validator or EvidenceContractValidator()
 
     async def execute(
         self,
@@ -79,24 +84,29 @@ class BatchModelSkillExecutor:
         specs: list[CheckSpec],
         snapshot: PageSnapshot,
         context: PageContext,
+        evidence_profile: str = "content_evidence",
     ) -> CheckExecutionResult:
         if not self.model.enabled:
             return CheckExecutionResult(check_runs=[self._unavailable_run(spec) for spec in specs])
 
         skills = [(spec, self.loader.load(spec.executor.capability_id)) for spec in specs]
         system = self._system_prompt(batch_id, skills)
+        page_evidence = self.evidence_compactor.compact(snapshot, evidence_profile)
+        self.evidence_validator.validate(specs, page_evidence)
         user = json.dumps(
             {
-                "page": self.evidence_compactor.compact(snapshot),
+                "page": page_evidence,
                 "context": context.model_dump(mode="json"),
                 "check_specs": [spec.model_dump(mode="json") for spec in specs],
             },
             ensure_ascii=False,
         )
         completion = await self.model.complete_json(
-            system=system,
-            user=user,
-            schema=batch_result_schema([spec.id for spec in specs]),
+            ModelRequest(
+                system=system,
+                content=[TextContent(user)],
+                schema=batch_result_schema([spec.id for spec in specs]),
+            )
         )
         raw_results = list(completion.content.get("results", []))
         counts = Counter(str(item.get("check_spec_id", "")) for item in raw_results)
@@ -113,6 +123,7 @@ class BatchModelSkillExecutor:
                 ModelCallRecord(
                     batch_id=batch_id,
                     check_spec_ids=[spec.id for spec in specs],
+                    provider=completion.provider,
                     model=completion.model,
                     provider_request_id=completion.provider_request_id,
                     prompt_tokens=completion.prompt_tokens,
@@ -145,9 +156,9 @@ class BatchModelSkillExecutor:
         return CheckRun(
             check_spec_id=spec.id,
             check_spec_version=spec.version,
-            status=CheckStatus.NEEDS_VERIFICATION,
+            status=CheckStatus.ERROR,
             title=spec.title,
-            reason="model capability is not configured",
+            reason="未执行：文本模型未配置",
             severity=spec.default_severity,
             confidence=0,
             executor_id=spec.executor.capability_id,
@@ -159,9 +170,9 @@ class BatchModelSkillExecutor:
             return CheckRun(
                 check_spec_id=spec.id,
                 check_spec_version=spec.version,
-                status=CheckStatus.NEEDS_VERIFICATION,
+                status=CheckStatus.ERROR,
                 title=spec.title,
-                reason="batch response omitted or duplicated this CheckSpec",
+                reason="未执行：模型响应不完整或包含重复结果",
                 severity=spec.default_severity,
                 confidence=0,
                 executor_id=spec.executor.capability_id,

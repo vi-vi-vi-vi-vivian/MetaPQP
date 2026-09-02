@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from portal_audit.application.ports.model import ModelCompletion
+from portal_audit.application.ports.model import ModelCompletion, TextContent
 from portal_audit.domain.models import (
     CheckExecutorRef,
     CheckSpec,
@@ -11,6 +11,7 @@ from portal_audit.domain.models import (
     PageSnapshot,
 )
 from portal_audit.skill_runtime.batch_executor import BatchModelSkillExecutor
+from portal_audit.skill_runtime.evidence_compactor import ModelEvidenceCompactor
 from portal_audit.skill_runtime.loader import SkillLoader
 
 ROOT = Path(__file__).parents[1]
@@ -23,10 +24,11 @@ class FakeBatchModel:
         self.user = ""
         self.system = ""
 
-    async def complete_json(self, *, system, user, schema=None):
-        self.system = system
-        self.user = user
-        assert schema["properties"]["results"]["minItems"] == 2
+    async def complete_json(self, request):
+        self.system = request.system
+        assert isinstance(request.content[0], TextContent)
+        self.user = request.content[0].text
+        assert request.schema["properties"]["results"]["minItems"] == 2
         return ModelCompletion(
             content={
                 "results": [
@@ -52,6 +54,7 @@ class FakeBatchModel:
                     },
                 ]
             },
+            provider="fake",
             model="test-model",
             prompt_tokens=1400,
             completion_tokens=160,
@@ -113,3 +116,34 @@ async def test_batch_executor_returns_atomic_runs_from_one_model_call():
     assert result.model_calls[0].total_tokens == 1560
     assert '<check_spec id="copy-quality"' in model.system
     assert "selector" not in json.loads(model.user)["page"]["elements"][0]
+
+
+def test_model_evidence_projection_never_truncates_text_elements_or_alt():
+    long_text = "页面正文" * 30000
+    elements = [
+        EvidenceElement(element_ref=f"dom-{index}", tag="p", text=f"段落 {index}")
+        for index in range(1, 1302)
+    ]
+    elements[-1] = EvidenceElement(
+        element_ref="dom-1301",
+        tag="img",
+        alt="末尾信息图片",
+        has_alt=True,
+    )
+    snapshot = PageSnapshot(
+        page_id="long-page",
+        requested_url="https://example.test/long",
+        final_url="https://example.test/long",
+        title="Long page",
+        viewport={"width": 1440, "height": 1000},
+        body_text=long_text,
+        evidence_elements=elements,
+    )
+
+    projection = ModelEvidenceCompactor().compact(snapshot)
+
+    assert projection["visible_text"] == long_text
+    assert len(projection["elements"]) == 1301
+    assert projection["elements"][-1]["alt"] == "末尾信息图片"
+    assert projection["coverage"]["truncated"] is False
+    assert projection["coverage"]["source_counts"] == projection["coverage"]["included_counts"]

@@ -1,0 +1,6 @@
+id: commitment-risk-timing
+version: 1.0.0
+kind: skill
+modality: text
+supported_scopes: [page]
+implementation: {skill_id: commitment-risk-timing}

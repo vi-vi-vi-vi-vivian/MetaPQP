@@ -8,7 +8,7 @@ sources:
     url: https://www.w3.org/TR/WCAG22/
 
   - id: nielsen-heuristics
-    name: 10 Usability Heuristics for User Interface Design
+    name: Nielsen 10 Usability Heuristics for User Interface Design
     owner: Nielsen Norman Group
     type: external_heuristic
     status: active

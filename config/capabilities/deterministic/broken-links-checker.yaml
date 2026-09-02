@@ -1,0 +1,8 @@
+id: broken-links-checker
+version: 1.0.0
+kind: deterministic
+supported_scopes: [page]
+required_evidence: [interactive_elements]
+implementation:
+  entrypoint: "portal_audit.capabilities.checkers.page:BrokenLinksChecker"
+  init: {max_links: "$settings.browser_max_links"}

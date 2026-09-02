@@ -1,0 +1,20 @@
+id: cross-stage-product-identity-consistency
+version: 1.0.0
+title: 跨阶段产品身份与定位一致性
+description: 检查不同页面对同一产品的名称、类型、服务主体和核心定位是否存在会改变用户认知的明确冲突；简称或合理的表达角度差异不报告。
+scope: journey
+tags: [journey, cross-stage, content, consistency]
+applies_when: {execution_modes: [sequential]}
+required_evidence: [journey_page_facts]
+comparison:
+  mode: anchor_to_each
+  required_facets: [product_identity]
+  min_nodes: 2
+executor: {type: model_skill, capability_id: journey-cross-stage-consistency}
+default_severity: p1
+standard_refs:
+  - criterion_id: metapqp-internal/cross-stage-product-identity-consistency
+    relation: implements
+  - criterion_id: nielsen-heuristics/H4
+    relation: supports
+

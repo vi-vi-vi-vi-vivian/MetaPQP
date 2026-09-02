@@ -1,0 +1,19 @@
+id: cross-stage-decision-guidance-continuity
+version: 1.0.0
+title: 跨阶段决策引导连续性
+description: 检查前序页面绑定到具体可选对象的推荐、流行度、性价比或优先级线索，在后续仍需比较同组对象的决策页面中是否保留等价表达或说明变化；后续页面不再需要选择时不报告。
+scope: journey
+tags: [journey, cross-stage, decision-guidance, continuity]
+applies_when: {execution_modes: [sequential]}
+required_evidence: [journey_page_facts]
+comparison:
+  mode: adjacent
+  required_facets: [decision_guidance, offering]
+  min_nodes: 2
+executor: {type: model_skill, capability_id: journey-cross-stage-consistency}
+default_severity: p2
+standard_refs:
+  - criterion_id: metapqp-internal/cross-stage-decision-guidance-continuity
+    relation: implements
+  - criterion_id: nielsen-heuristics/H6
+    relation: supports

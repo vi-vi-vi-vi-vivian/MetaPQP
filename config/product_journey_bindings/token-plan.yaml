@@ -5,7 +5,9 @@ journey_template: cloud-product-lifecycle
 pages:
   - page_id: awareness
     stage: awareness
+    page_surface: portal
     url: https://www.huaweicloud.com/agentorchard/tokenplan.html
   - page_id: purchase
     stage: purchase
+    page_surface: console
     url: https://console.huaweicloud.com/modelarts/?region=cn-southwest-2#/model-studio/resourcePlanManagement

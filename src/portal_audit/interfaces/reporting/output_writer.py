@@ -19,11 +19,15 @@ class OutputWriter:
         *,
         model_name: str,
         model_enabled: bool,
+        visual_model_name: str | None = None,
+        visual_model_enabled: bool = False,
         standards: StandardsRegistry | None = None,
     ):
         self.output_root = output_root
         self.model_name = model_name
         self.model_enabled = model_enabled
+        self.visual_model_name = visual_model_name
+        self.visual_model_enabled = visual_model_enabled
         self.standards = standards
 
     def write(self, result: AuditResult) -> Path:
@@ -101,6 +105,7 @@ class OutputWriter:
                     "standard_refs": self._resolve_standard_refs(finding.standard_refs),
                     "suggestion_after": finding.suggestion_after,
                     "review_status": finding.review_status,
+                    "verification_status": finding.verification_status,
                     "marker": len(issues) + 1,
                 }
             )
@@ -179,6 +184,20 @@ class OutputWriter:
                 "provider": "openrouter",
                 "name": self.model_name,
                 "enabled": self.model_enabled,
+            },
+            "model_profiles": {
+                "default-text": {
+                    "provider": "openrouter",
+                    "name": self.model_name,
+                    "modalities": ["text"],
+                    "enabled": self.model_enabled,
+                },
+                "default-vision": {
+                    "provider": "google-gemini",
+                    "name": self.visual_model_name,
+                    "modalities": ["text", "image"],
+                    "enabled": self.visual_model_enabled,
+                },
             },
             "run": {
                 "job_id": result.job_id,
@@ -338,8 +357,17 @@ class OutputWriter:
             "".join(self._finding_html(item) for item in audit["issues"])
             or "<div class='empty'>当前证据下未发现问题。</div>"
         )
+        status_labels = {
+            "pass": "通过",
+            "fail": "发现问题",
+            "needs_verification": "待确认",
+            "error": "未执行",
+        }
         check_rows = "".join(
-            f"<tr><td>{html.escape(run['check_spec_id'])}</td><td><span class='status {run['status']}'>{html.escape(run['status'])}</span></td><td>{html.escape(run['reason'])}</td></tr>"
+            f"<tr><td>{html.escape(run['check_spec_id'])}</td>"
+            f"<td><span class='status {run['status']}'>"
+            f"{html.escape(status_labels.get(run['status'], run['status']))}</span></td>"
+            f"<td>{html.escape(run['reason'])}</td></tr>"
             for run in audit["check_runs"]
         )
         screenshot = section.get("annotated_screenshot") or section.get("screenshot")
@@ -362,7 +390,7 @@ main{{max-width:1320px;margin:auto;padding:24px}} .metrics{{display:grid;grid-te
 .grid{{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(340px,.75fr);gap:20px;align-items:start}} .panel{{padding:18px;margin-bottom:18px}} h2{{font-size:19px;margin:0 0 14px}} img{{width:100%;border:1px solid var(--line);border-radius:7px}}
 .finding{{border:1px solid var(--line);border-left:5px solid var(--amber);padding:15px;margin:12px 0;background:#fff}} .finding.p0,.finding.p1{{border-left-color:var(--red)}} .finding.p2{{border-left-color:var(--green)}} .finding-head{{display:flex;gap:10px;align-items:center}} .finding-head span{{font:700 12px ui-monospace,monospace;color:var(--amber)}} .finding h3{{font-size:16px;margin:0}} dl{{display:grid;grid-template-columns:58px 1fr;gap:6px 10px;font-size:13px}} dt{{color:var(--muted)}} dd{{margin:0}}
 .finding-head .marker{{display:inline-grid;place-items:center;min-width:28px;height:28px;border-radius:50%;background:var(--red);color:white;font:700 13px ui-monospace,monospace}} .locate{{margin:10px 0;padding:10px;background:#fff4f3;border:1px solid #fecdca;font-size:12px}} .locate a{{color:var(--red);font-weight:700;text-decoration:none}} .locate code{{display:block;margin-top:5px;white-space:normal;word-break:break-all}}
-table{{width:100%;border-collapse:collapse;font-size:13px}} th,td{{padding:10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}} th{{color:var(--muted)}} .status{{font:700 11px ui-monospace,monospace}} .pass{{color:var(--green)}} .fail{{color:var(--red)}} .needs_verification{{color:var(--amber)}} .empty{{padding:24px;color:var(--muted);text-align:center;border:1px dashed var(--line)}}
+table{{width:100%;border-collapse:collapse;font-size:13px}} th,td{{padding:10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}} th{{color:var(--muted)}} .status{{font:700 11px ui-monospace,monospace}} .pass{{color:var(--green)}} .fail{{color:var(--red)}} .needs_verification{{color:var(--amber)}} .error{{color:var(--muted)}} .empty{{padding:24px;color:var(--muted);text-align:center;border:1px dashed var(--line)}}
 @media(max-width:850px){{.metrics{{grid-template-columns:1fr 1fr}}.grid{{grid-template-columns:1fr}}}} @media(max-width:520px){{.metrics{{grid-template-columns:1fr}}main{{padding:14px}}}}
 </style></head><body>
 <header><div class='eyebrow'>PAGE ASSESSMENT · {html.escape(audit["run"]["job_id"])}</div><h1>{html.escape(section["title"])}</h1><div class='url'>{html.escape(section["url"])}</div></header>
@@ -381,6 +409,9 @@ table{{width:100%;border-collapse:collapse;font-size:13px}} th,td{{padding:10px;
             else "缺失型或技术型问题：当前没有可框选的页面元素。"
         )
         standards = OutputWriter._standard_refs_html(item.get("standard_refs", []))
+        verification = (
+            "待人工确认" if item.get("verification_status") == "pending" else "已复核"
+        )
         return (
             f"<article class='finding {item['severity']}'><div class='finding-head'>"
             f"<span class='marker'>{item['marker']}</span><span>{html.escape(item['severity'].upper())}</span>"
@@ -388,27 +419,30 @@ table{{width:100%;border-collapse:collapse;font-size:13px}} th,td{{padding:10px;
             f"<p>{html.escape(item['evidence'])}</p><dl><dt>规范</dt>"
             f"<dd>{standards}</dd><dt>建议</dt>"
             f"<dd>{html.escape(item['suggestion_after'])}</dd><dt>置信度</dt>"
-            f"<dd>{item['confidence']:.0%}</dd></dl></article>"
+            f"<dd>{item['confidence']:.0%}</dd><dt>状态</dt>"
+            f"<dd>{verification}</dd></dl></article>"
         )
 
     @staticmethod
     def _standard_refs_html(references: list[dict]) -> str:
         if not references:
             return "未映射规范来源"
-        labels = {
-            "external_standard": "外部标准",
-            "external_heuristic": "可用性启发式",
-            "internal_guidance": "内部检查建议",
-            "organization_standard": "组织设计规范",
+        relation_labels = {
+            "implements": "直接实现",
+            "partial_coverage": "部分覆盖",
+            "supports": "提供支持证据",
+            "inspired_by": "参考",
         }
         rows = []
         for ref in references:
-            source_type = ref.get("source_type")
-            category = labels.get(source_type, "规范引用")
+            source = ref.get("source_name") or ref.get("source_id", "规范来源")
             criterion = ref.get("criterion_title") or ref.get("criterion_id", "")
-            relation = ref.get("relation", "")
+            criterion_code = str(ref.get("criterion_id", "")).split("/", 1)[-1]
+            level = f" · {ref['criterion_level']}级" if ref.get("criterion_level") else ""
+            relation = relation_labels.get(ref.get("relation", ""), ref.get("relation", ""))
             rows.append(
-                f"<div><strong>{html.escape(category)}</strong> · "
-                f"{html.escape(criterion)} · {html.escape(relation)}</div>"
+                f"<div><strong>{html.escape(source)}</strong> · "
+                f"{html.escape(criterion_code)} {html.escape(criterion)}{level} · "
+                f"{html.escape(relation)}</div>"
             )
         return "".join(rows)

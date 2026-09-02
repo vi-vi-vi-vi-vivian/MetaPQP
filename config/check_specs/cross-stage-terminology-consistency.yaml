@@ -1,0 +1,20 @@
+id: cross-stage-terminology-consistency
+version: 1.0.0
+title: 跨阶段术语与概念连续性
+description: 检查同一业务对象是否在不同页面无解释地更名、同一术语是否改变含义，或是否突然引入会妨碍理解和选择的新概念；普通措辞变化不报告。
+scope: journey
+tags: [journey, cross-stage, terminology, consistency]
+applies_when: {execution_modes: [sequential]}
+required_evidence: [journey_page_facts]
+comparison:
+  mode: all_observed
+  required_facets: [terminology, product_identity, offering]
+  min_nodes: 2
+executor: {type: model_skill, capability_id: journey-cross-stage-consistency}
+default_severity: p2
+standard_refs:
+  - criterion_id: metapqp-internal/cross-stage-terminology-consistency
+    relation: implements
+  - criterion_id: nielsen-heuristics/H6
+    relation: supports
+

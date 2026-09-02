@@ -1,0 +1,20 @@
+id: cross-stage-commercial-terms-consistency
+version: 1.0.0
+title: 跨阶段商业条件一致性
+description: 检查针对同一购买对象的价格、币种、计费周期、折扣和免费条件是否存在会影响购买决策的明确冲突；信息未重复不直接视为问题。
+scope: journey
+tags: [journey, cross-stage, commerce, consistency]
+applies_when: {execution_modes: [sequential]}
+required_evidence: [journey_page_facts]
+comparison:
+  mode: adjacent
+  required_facets: [commercial_terms]
+  min_nodes: 2
+executor: {type: model_skill, capability_id: journey-cross-stage-consistency}
+default_severity: p1
+standard_refs:
+  - criterion_id: metapqp-internal/cross-stage-commercial-terms-consistency
+    relation: implements
+  - criterion_id: nielsen-heuristics/H4
+    relation: supports
+

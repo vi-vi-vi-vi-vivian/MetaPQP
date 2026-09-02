@@ -1,0 +1,20 @@
+id: cross-stage-action-expectation-continuity
+version: 1.0.0
+title: 跨阶段操作预期与落地内容连续性
+description: 检查前一页面的操作名称和附近语境建立的预期，是否与下一页面提供的任务和对象一致；仅检查内容含义，不重复判断链接可达性。
+scope: journey
+tags: [journey, cross-stage, action, continuity]
+applies_when: {execution_modes: [sequential]}
+required_evidence: [journey_page_facts, transition_trace]
+comparison:
+  mode: adjacent
+  required_facets: [action_expectation, product_identity]
+  min_nodes: 2
+executor: {type: model_skill, capability_id: journey-cross-stage-consistency}
+default_severity: p1
+standard_refs:
+  - criterion_id: metapqp-internal/cross-stage-action-expectation-continuity
+    relation: implements
+  - criterion_id: nielsen-heuristics/H2
+    relation: supports
+

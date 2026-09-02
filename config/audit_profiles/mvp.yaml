@@ -15,3 +15,18 @@ check_specs:
   - image-alt
   - mobile-horizontal-overflow
   - mobile-tap-target-size
+  - visible-content-occlusion
+  - text-clipping-and-truncation
+  - responsive-visual-integrity
+  - journey-transition-reachability
+  - entry-and-resume-continuity
+  - transaction-context-continuity
+  - cross-stage-product-identity-consistency
+  - cross-stage-decision-guidance-continuity
+  - cross-stage-commercial-terms-consistency
+  - cross-stage-offering-consistency
+  - cross-stage-action-expectation-continuity
+  - cross-stage-terminology-consistency
+  - cross-stage-selection-continuity
+  - cross-stage-lifecycle-state-consistency
+  - cross-stage-commitment-policy-consistency

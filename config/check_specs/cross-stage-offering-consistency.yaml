@@ -1,0 +1,20 @@
+id: cross-stage-offering-consistency
+version: 1.0.0
+title: 跨阶段可选内容、规格与权益一致性
+description: 检查不同页面对同一可选产品内容的版本、规格、容量、配额、功能权限和服务范围是否能够对应，且不存在会导致选错对象的明确冲突。
+scope: journey
+tags: [journey, cross-stage, offering, consistency]
+applies_when: {execution_modes: [sequential]}
+required_evidence: [journey_page_facts]
+comparison:
+  mode: adjacent
+  required_facets: [offering]
+  min_nodes: 2
+executor: {type: model_skill, capability_id: journey-cross-stage-consistency}
+default_severity: p1
+standard_refs:
+  - criterion_id: metapqp-internal/cross-stage-offering-consistency
+    relation: implements
+  - criterion_id: nielsen-heuristics/H4
+    relation: supports
+

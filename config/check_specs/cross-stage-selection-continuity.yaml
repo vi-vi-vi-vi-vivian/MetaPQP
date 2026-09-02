@@ -1,0 +1,20 @@
+id: cross-stage-selection-continuity
+version: 1.0.0
+title: 跨阶段默认项与用户选择状态连续性
+description: 检查默认项和用户已经选择的对象在后续页面是否能够对应，且不会在未说明的情况下切换为另一对象；推荐标签和页面排列顺序由其他规则检查。
+scope: journey
+tags: [journey, cross-stage, selection, consistency]
+applies_when: {execution_modes: [sequential]}
+required_evidence: [journey_page_facts]
+comparison:
+  mode: adjacent
+  required_facets: [selection_state, offering]
+  min_nodes: 2
+executor: {type: model_skill, capability_id: journey-cross-stage-consistency}
+default_severity: p1
+standard_refs:
+  - criterion_id: metapqp-internal/cross-stage-selection-continuity
+    relation: implements
+  - criterion_id: nielsen-heuristics/H4
+    relation: supports
+

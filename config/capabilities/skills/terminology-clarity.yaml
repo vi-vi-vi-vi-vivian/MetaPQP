@@ -1,0 +1,6 @@
+id: terminology-clarity
+version: 1.0.0
+kind: skill
+modality: text
+supported_scopes: [page]
+implementation: {skill_id: terminology-clarity}

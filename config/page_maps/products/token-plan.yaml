@@ -1,0 +1,24 @@
+nodes:
+  - id: tokenplan-awareness
+    version: 1.0.0
+    title: TokenPlan 感知页
+    entry_url: https://agentorchard.huaweicloud.com/tokenplan.html
+    url_patterns:
+      - https://agentorchard.huaweicloud.com/tokenplan.html
+    expected_primary_stage: awareness
+    allowed_stages: [awareness, purchase]
+    expected_surface: portal
+    auth_required: false
+    product: tokenplan
+
+  - id: tokenplan-purchase
+    version: 1.0.0
+    title: TokenPlan 购买页
+    entry_url: https://console.huaweicloud.com/modelarts/?region=cn-southwest-2#/model-studio/resourcePlanManagement/purchase
+    url_patterns:
+      - https://console.huaweicloud.com/modelarts/#/model-studio/resourcePlanManagement*
+    expected_primary_stage: purchase
+    allowed_stages: [purchase, order]
+    expected_surface: console
+    auth_required: true
+    product: tokenplan
