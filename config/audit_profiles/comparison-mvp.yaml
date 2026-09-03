@@ -1,0 +1,3 @@
+id: comparison-mvp
+version: 1.0.0
+check_specs: [reference-outcome-visibility, reference-zero-cost-access, reference-option-discernibility, reference-decision-information-proximity, reference-state-continuity, reference-commitment-boundary]

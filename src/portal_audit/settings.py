@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     config_root: Path = PROJECT_ROOT / "config"
     skills_root: Path = PROJECT_ROOT / "skills"
     workflow_timeout_seconds: float = 300
+    progress_logs: bool = True
     openjiuwen_log_level: str = "WARNING"
     openjiuwen_console_logs: bool = False
 

@@ -1,0 +1,11 @@
+id: reference-commitment-boundary
+version: 1.0.0
+title: 对比承诺边界披露
+description: 检查能力限制、前置条件、计费或风险边界是否可借鉴参考页面在用户操作前清楚告知的做法。
+scope: comparison
+tags: [comparison, commitment]
+applies_when: {dimensions: [commitment_boundary], page_roles: [awareness, purchase]}
+required_evidence: [visible_text, evidence_elements]
+executor: {type: model_skill, capability_id: competitive-opportunity-discovery}
+default_severity: p2
+standard_refs: [{criterion_id: metapqp-internal/reference-commitment-boundary, relation: implements}]

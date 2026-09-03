@@ -9,41 +9,16 @@ from collections import Counter
 from datetime import datetime
 from pathlib import Path
 
-MODULE_BY_PAGE = {
-    "orchard-home": "A",
-    "agents-index": "A",
-    "agentarts-ecosystem": "A",
-    "models-index": "A",
-    "tokenplan-awareness": "A",
-    "industry-ai-index": "A",
-    "skills-market": "C",
-    "ai-shell-awareness": "C",
-    "openjiuwen-external": "C",
-}
-
-PRODUCT_LABELS = {
-    "agentarts": "AgentArts",
-    "agentorchard": "智果园",
-    "agri-explorer": "农科发现",
-    "ai-pathology": "智慧病理",
-    "ai-shell": "AI Shell",
-    "cloudrobo": "CloudRobo",
-    "codearts": "CodeArts",
-    "doczip": "DocZip",
-    "health-assistant": "健康管理助手",
-    "industry-ai": "行业 AI",
-    "maas": "MaaS",
-    "officeace": "OfficeAce",
-    "openjiuwen": "openJiuwen",
-    "skills": "Skills 市场",
-    "tokenplan": "Token Plan",
-}
-
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input", type=Path, default=Path("output/web"))
     parser.add_argument("--output", type=Path, default=Path("output/dashboard.html"))
+    parser.add_argument("--title", default="MetaPQP 页面检查总览")
+    parser.add_argument(
+        "--subtitle",
+        default="汇总当前检查结果的覆盖范围、风险分布和页面报告。",
+    )
     return parser.parse_args()
 
 
@@ -62,11 +37,9 @@ def collect_runs(input_root: Path, output_path: Path) -> list[dict]:
         auth = snapshot.get("authentication") or {}
         runs.append(
             {
-                "module": MODULE_BY_PAGE.get(target["page_id"], "B"),
+                "module": target.get("module") or "—",
                 "product": target.get("product") or "unknown",
-                "product_label": PRODUCT_LABELS.get(
-                    target.get("product") or "unknown", target.get("product") or "未知产品"
-                ),
+                "product_label": target.get("product") or "未命名产品",
                 "page_id": target["page_id"],
                 "url": target["url"],
                 "surface": target.get("page_surface", "portal"),
@@ -87,7 +60,7 @@ def collect_runs(input_root: Path, output_path: Path) -> list[dict]:
     return runs
 
 
-def build_html(runs: list[dict]) -> str:
+def build_html(runs: list[dict], title: str, subtitle: str) -> str:
     now = datetime.now().astimezone()
     generated_at = now.strftime("%Y-%m-%d %H:%M:%S %Z")
     build_id = now.strftime("%Y%m%d%H%M%S%f")
@@ -97,6 +70,8 @@ def build_html(runs: list[dict]) -> str:
         .replace("__GENERATED_AT__", html.escape(generated_at))
         .replace("__REPORT_COUNT__", str(len(runs)))
         .replace("__BUILD_ID__", build_id)
+        .replace("__TITLE__", html.escape(title))
+        .replace("__SUBTITLE__", html.escape(subtitle))
     )
 
 
@@ -106,7 +81,7 @@ def main() -> int:
     runs = collect_runs(args.input, args.output)
     if not runs:
         raise SystemExit(f"No audit.json files found below {args.input}")
-    args.output.write_text(build_html(runs), encoding="utf-8")
+    args.output.write_text(build_html(runs, args.title, args.subtitle), encoding="utf-8")
     print(f"Generated {args.output} from {len(runs)} reports")
     return 0
 
@@ -117,7 +92,7 @@ TEMPLATE = r'''<!doctype html>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="dashboard-build" content="__BUILD_ID__">
-  <title>MetaPQP · 智果园检查总览</title>
+  <title>__TITLE__</title>
   <style>
     :root {
       color-scheme: light;
@@ -231,8 +206,8 @@ TEMPLATE = r'''<!doctype html>
   <header class="masthead">
     <div class="masthead-inner">
       <p class="eyebrow">MetaPQP / Audit control desk</p>
-      <h1>智果园页面检查总览</h1>
-      <p class="subtitle">把 A、B、C 三个模块的覆盖范围、风险分布和每个场景报告放在同一张工作台中。所有数据来自当前 output/web 下的正式检查结果。</p>
+      <h1>__TITLE__</h1>
+      <p class="subtitle">__SUBTITLE__</p>
       <div class="coverage-rail" id="coverageRail"></div>
     </div>
   </header>
@@ -288,14 +263,15 @@ TEMPLATE = r'''<!doctype html>
       const consoleRuns = RUNS.filter(r => r.surface === 'console');
       const authOk = consoleRuns.filter(r => r.auth_status === 'authenticated').length;
       const values = [
-        ['唯一页面', uniquePages, 'A/B/C 去重后'],
+        ['唯一页面', uniquePages, '按页面标识去重'],
         ['场景报告', RUNS.length, '均可直接打开'],
         ['P1', RUNS.reduce((n,r) => n+r.p1, 0), '建议优先处理'],
         ['P2', RUNS.reduce((n,r) => n+r.p2, 0), '一般改进项'],
         ['Console 登录', `${authOk}/${consoleRuns.length}`, '自动登录成功']
       ];
       document.querySelector('#metrics').innerHTML = values.map((v,i) => `<article class="metric ${i===2?'risk':''}"><span class="metric-label">${v[0]}</span><strong class="metric-value">${v[1]}</strong><div class="metric-note">${v[2]}</div></article>`).join('');
-      document.querySelector('#coverageRail').innerHTML = ['A','B','C'].map(module => {
+      const modules = [...new Set(pages.map(page => page.module))].sort();
+      document.querySelector('#coverageRail').innerHTML = modules.map(module => {
         const subset = pages.filter(p => p.module === module);
         return `<div class="rail-segment"><b>模块 ${module} · ${subset.length} 页</b><span>${subset.reduce((n,p)=>n+p.runs.length,0)} 份场景报告</span></div>`;
       }).join('');

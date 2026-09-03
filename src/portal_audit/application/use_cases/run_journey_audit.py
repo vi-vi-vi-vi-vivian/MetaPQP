@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from portal_audit.adapters.openjiuwen.workflow_runner import new_job_id
 from portal_audit.application.ports.auth import (
     AuthenticationRequiredError,
     AuthSessionProviderPort,
@@ -13,6 +12,10 @@ from portal_audit.application.ports.journey_browser import (
     BrowserJourneySessionPort,
     JourneyBrowserStep,
 )
+from portal_audit.application.services.evidence_gate import (
+    PageEvidenceCaptureError,
+    PageEvidenceGate,
+)
 from portal_audit.application.services.journey_checks import (
     JourneyAssessmentBuilder,
     JourneyCheckExecutor,
@@ -20,6 +23,8 @@ from portal_audit.application.services.journey_checks import (
     JourneyEvidenceBuilder,
 )
 from portal_audit.application.services.page_map_resolver import PageMapNodeResolver
+from portal_audit.application.services.progress import ProgressReporter
+from portal_audit.application.services.run_ids import new_job_id
 from portal_audit.application.services.run_paths import page_run_relative_dir
 from portal_audit.application.services.transition_checks import (
     TransitionCheckExecutor,
@@ -64,6 +69,8 @@ class JourneyAuditRunner:
         journey_assessment_builder: JourneyAssessmentBuilder,
         output_writer,
         journey_executors: JourneyExecutorRegistry | None = None,
+        progress: ProgressReporter | None = None,
+        evidence_gate: PageEvidenceGate | None = None,
     ):
         self.page_pipeline = page_pipeline
         self.page_maps = page_maps
@@ -81,6 +88,8 @@ class JourneyAuditRunner:
         self.journey_assessment_builder = journey_assessment_builder
         self.output_writer = output_writer
         self.journey_executors = journey_executors
+        self.progress = progress or ProgressReporter()
+        self.evidence_gate = evidence_gate or PageEvidenceGate()
 
     async def run(self, request: JourneyAuditRequest) -> JourneyAuditResult:
         journey = self.journeys.get(request.journey_id)
@@ -103,6 +112,11 @@ class JourneyAuditRunner:
 
     async def _run_sequential(self, request: JourneyAuditRequest) -> JourneyAuditResult:
         journey = self.journeys.get(request.journey_id)
+        progress = self.progress
+        started_at = progress.task_start(
+            "MetaPQP Journey 检查开始",
+            (f"旅程：{journey.title}", f"场景：{request.device} · {request.locale}"),
+        )
         if not request.supervised:
             raise ValueError("Sequential Journey execution requires supervised=true")
         if not journey.transitions:
@@ -143,7 +157,9 @@ class JourneyAuditRunner:
             (target for node, target in zip(nodes, targets, strict=True) if node.auth_required),
             targets[-1],
         )
+        auth_started_at = progress.stage_start("1/5 登录与权限准备", "正在确认旅程所需的登录状态……")
         auth_session = await self.auth_provider.prepare(auth_target, request.auth_mode)
+        progress.stage_complete(auth_started_at, (f"登录状态：{auth_session.summary.status.value}",))
         if (
             any(node.auth_required for node in nodes)
             and auth_session.summary.status != AuthStatus.AUTHENTICATED
@@ -181,11 +197,26 @@ class JourneyAuditRunner:
             )
             for index, transition in enumerate(transitions)
         ]
+        capture_started_at = progress.stage_start("2/5 执行页面跳转", "正在按旅程定义采集页面与过渡操作……")
         browser_run = await self.browser_factory(request.headless).run_journey(
             steps=steps,
             safety_profile=safety_profile,
             auth_session=auth_session,
         )
+        progress.stage_complete(
+            capture_started_at,
+            (
+                f"已完成过渡：{sum(item.status == 'completed' for item in browser_run.traces)}/{len(transitions)}",
+                f"已采集页面：{len(browser_run.snapshots)} 个",
+            ),
+        )
+        try:
+            for target, snapshot in zip(targets, browser_run.snapshots, strict=True):
+                self.evidence_gate.ensure(target, snapshot)
+        except PageEvidenceCaptureError as error:
+            progress.warning("旅程页面采集不完整，逐页与跨阶段检查已停止", (str(error),))
+            raise
+        page_started_at = progress.stage_start("3/5 逐页体验检查", "正在对旅程中的每个页面执行页面检查……")
         page_results = []
         for page_request, target, snapshot, page_job in zip(
             page_requests,
@@ -204,6 +235,8 @@ class JourneyAuditRunner:
                     job_id=page_job,
                 )
             )
+        progress.stage_complete(page_started_at, (f"已生成页面报告：{len(page_results)} 个",))
+        transition_started_at = progress.stage_start("4/5 过渡与跨阶段一致性", "正在检查操作过渡和跨页面认知连续性……")
         transition_runs = []
         for index, trace in enumerate(browser_run.traces):
             transition_plan = self.transition_plan_builder.build(
@@ -229,6 +262,13 @@ class JourneyAuditRunner:
             journey_evidence,
         )
         journey_assessment = self.journey_assessment_builder.build(journey_runs)
+        progress.stage_complete(
+            transition_started_at,
+            (
+                f"过渡检查：{len(transition_runs)} 条",
+                f"跨阶段检查：{len(journey_runs)} 条 · 发现问题：{sum(item.status.value == 'fail' for item in journey_runs)} 条",
+            ),
+        )
         completed = len(browser_run.traces) == len(transitions) and all(
             item.status == "completed" for item in browser_run.traces
         )
@@ -257,7 +297,14 @@ class JourneyAuditRunner:
             journey_model_calls=journey_model_calls,
             page_results=page_results,
         )
+        report_started_at = progress.stage_start("5/5 生成 Journey 报告", "正在汇总页面、过渡与跨阶段结果……")
         result.output_dir = str(self.output_writer.write(result))
+        progress.stage_complete(report_started_at, (f"报告：{result.output_dir}",))
+        progress.task_complete(
+            "Journey 检查完成",
+            started_at,
+            (f"状态：{result.status.value} · 覆盖度：{result.coverage_status.value}",),
+        )
         return result
 
     @staticmethod

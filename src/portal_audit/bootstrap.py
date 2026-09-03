@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from portal_audit.adapters.artifacts.local_store import LocalArtifactStore
 from portal_audit.adapters.auth.config import YamlAccountCredentialSource
 from portal_audit.adapters.auth.huaweicloud import HuaweiCloudAuthProvider
@@ -10,12 +12,17 @@ from portal_audit.adapters.browser.playwright_journey import PlaywrightJourneySe
 from portal_audit.adapters.models.gemini import GeminiModelAdapter
 from portal_audit.adapters.models.openrouter import OpenRouterModelAdapter
 from portal_audit.adapters.network.proxy import resolve_https_proxy
-from portal_audit.adapters.openjiuwen.workflow_runner import OpenJiuwenWorkflowRunner
 from portal_audit.adapters.persistence.sqlite import SQLiteAuditJobRepository
 from portal_audit.application.services.assessment_builder import AssessmentBuilder
 from portal_audit.application.services.baseline_collector import BaselineCollector
 from portal_audit.application.services.check_executor import CheckExecutor
 from portal_audit.application.services.check_plan_builder import CheckPlanBuilder
+from portal_audit.application.services.comparison_checks import (
+    ComparisonAssessmentBuilder,
+    ComparisonCheckExecutor,
+    ComparisonCheckPlanBuilder,
+    ComparisonEvidenceBuilder,
+)
 from portal_audit.application.services.journey_checks import (
     JourneyAssessmentBuilder,
     JourneyCheckExecutor,
@@ -24,10 +31,12 @@ from portal_audit.application.services.journey_checks import (
 )
 from portal_audit.application.services.page_context_resolver import PageContextResolver
 from portal_audit.application.services.page_map_resolver import PageMapNodeResolver
+from portal_audit.application.services.progress import ProgressReporter
 from portal_audit.application.services.transition_checks import (
     TransitionCheckExecutor,
     TransitionCheckPlanBuilder,
 )
+from portal_audit.application.use_cases.run_comparison_audit import ComparisonAuditRunner
 from portal_audit.application.use_cases.run_journey_audit import JourneyAuditRunner
 from portal_audit.application.use_cases.run_page_audit import PageAuditPipeline
 from portal_audit.capabilities.context_detectors.detectors import (
@@ -38,6 +47,7 @@ from portal_audit.capabilities.context_detectors.detectors import (
 from portal_audit.domain.registry import (
     CapabilityRegistry,
     CheckSpecRegistry,
+    ComparisonProfileRegistry,
     JourneyExecutorRegistry,
     JourneyRegistry,
     PageMapRegistry,
@@ -45,6 +55,7 @@ from portal_audit.domain.registry import (
     StandardsRegistry,
     TransitionRegistry,
 )
+from portal_audit.interfaces.reporting.comparison_output_writer import ComparisonOutputWriter
 from portal_audit.interfaces.reporting.journey_output_writer import JourneyOutputWriter
 from portal_audit.interfaces.reporting.output_writer import OutputWriter
 from portal_audit.settings import Settings
@@ -52,6 +63,9 @@ from portal_audit.skill_runtime.batch_executor import BatchModelSkillExecutor
 from portal_audit.skill_runtime.executor import ModelSkillExecutor
 from portal_audit.skill_runtime.loader import SkillLoader
 from portal_audit.skill_runtime.visual_executor import VisualBatchSkillExecutor
+
+if TYPE_CHECKING:
+    from portal_audit.adapters.openjiuwen.workflow_runner import OpenJiuwenWorkflowRunner
 
 
 def _secret(value):
@@ -155,6 +169,12 @@ def build_auth_provider(
 def build_page_audit_runner(settings: Settings | None = None) -> OpenJiuwenWorkflowRunner:
     settings = settings or Settings()
     _configure_openjiuwen_logging(settings)
+    # Import the workflow only after the SDK logger is configured.  OpenJiuwen
+    # registers optional components during import and otherwise prints its
+    # internal startup inventory before this application can suppress it.
+    from portal_audit.adapters.openjiuwen.workflow_runner import OpenJiuwenWorkflowRunner
+
+    progress = ProgressReporter(enabled=settings.progress_logs)
     store = LocalArtifactStore(settings.output_root)
     browser = PlaywrightBrowser(
         store,
@@ -195,6 +215,7 @@ def build_page_audit_runner(settings: Settings | None = None) -> OpenJiuwenWorkf
         skill_executor,
         batch_skill_executor,
         visual_skill_executor,
+        progress=progress,
     )
     output_writer = OutputWriter(
         settings.output_root,
@@ -211,12 +232,14 @@ def build_page_audit_runner(settings: Settings | None = None) -> OpenJiuwenWorkf
         check_executor=executor,
         assessment_builder=AssessmentBuilder(registry),
         output_writer=output_writer,
+        progress=progress,
     )
     repository = SQLiteAuditJobRepository(settings.data_root / "app.db")
     return OpenJiuwenWorkflowRunner(
         pipeline,
         repository,
         timeout_seconds=settings.workflow_timeout_seconds,
+        progress=progress,
     )
 
 
@@ -279,6 +302,7 @@ def build_journey_audit_runner(settings: Settings | None = None) -> JourneyAudit
             check_specs,
             journey_model,
             SkillLoader(settings.skills_root, capabilities),
+            progress=page_runner.progress,
         ),
         journey_assessment_builder=JourneyAssessmentBuilder(),
         output_writer=JourneyOutputWriter(
@@ -289,4 +313,23 @@ def build_journey_audit_runner(settings: Settings | None = None) -> JourneyAudit
         journey_executors=JourneyExecutorRegistry(
             settings.config_root / "journey_executors"
         ).load(),
+        progress=page_runner.progress,
+    )
+
+
+def build_comparison_audit_runner(settings: Settings | None = None) -> ComparisonAuditRunner:
+    settings = settings or Settings()
+    page_runner = build_page_audit_runner(settings)
+    standards = StandardsRegistry(settings.config_root / "standards").load()
+    capabilities = CapabilityRegistry(settings.config_root / "capabilities").load()
+    specs = CheckSpecRegistry(settings.config_root / "check_specs", standards, capabilities).load()
+    return ComparisonAuditRunner(
+        page_runner=page_runner,
+        profiles=ComparisonProfileRegistry(settings.config_root / "comparison_profiles").load(),
+        evidence_builder=ComparisonEvidenceBuilder(),
+        plan_builder=ComparisonCheckPlanBuilder(specs, settings.config_root / "audit_profiles"),
+        executor=ComparisonCheckExecutor(specs, _build_model(settings, settings.text_model_profile), SkillLoader(settings.skills_root, capabilities)),
+        assessment_builder=ComparisonAssessmentBuilder(),
+        output_writer=ComparisonOutputWriter(settings.output_root),
+        progress=page_runner.progress,
     )

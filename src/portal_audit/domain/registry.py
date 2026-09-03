@@ -13,6 +13,7 @@ from portal_audit.domain.models import (
     CapabilityManifest,
     CheckScope,
     CheckSpec,
+    ComparisonProfile,
     JourneyDefinition,
     JourneyExecutorManifest,
     PageMapNode,
@@ -253,13 +254,13 @@ class CheckSpecRegistry:
         journey_conditions = set(spec.applies_when).intersection(
             {"journey_ids", "execution_modes"}
         )
-        if spec.scope == CheckScope.PAGE and (transition_conditions or journey_conditions):
+        comparison_conditions = set(spec.applies_when).intersection(
+            {"dimensions", "page_roles"}
+        )
+        if spec.scope == CheckScope.PAGE and (transition_conditions or journey_conditions or comparison_conditions):
             raise ValueError(f"Page CheckSpec {spec.id} uses non-page applies_when fields")
-        if spec.scope == CheckScope.TRANSITION:
-            if journey_conditions:
-                raise ValueError(f"Transition CheckSpec {spec.id} uses Journey conditions")
-            if not transition_conditions:
-                raise ValueError(f"Transition CheckSpec {spec.id} must declare applicability")
+        if spec.scope == CheckScope.TRANSITION and journey_conditions:
+            raise ValueError(f"Transition CheckSpec {spec.id} uses Journey conditions")
         if spec.scope == CheckScope.JOURNEY:
             if transition_conditions:
                 raise ValueError(f"Journey CheckSpec {spec.id} uses Transition conditions")
@@ -269,12 +270,45 @@ class CheckSpecRegistry:
             raise ValueError(
                 f"Non-Journey CheckSpec {spec.id} cannot declare comparison policy"
             )
+        if spec.scope == CheckScope.COMPARISON:
+            if transition_conditions or journey_conditions:
+                raise ValueError(f"Comparison CheckSpec {spec.id} uses Journey or Transition conditions")
+            if not comparison_conditions:
+                raise ValueError(f"Comparison CheckSpec {spec.id} must declare applicability")
+        elif comparison_conditions:
+            raise ValueError(f"Non-Comparison CheckSpec {spec.id} uses comparison conditions")
 
     def all(self) -> list[CheckSpec]:
         return list(self._specs.values())
 
     def get(self, check_spec_id: str) -> CheckSpec:
         return self._specs[check_spec_id]
+
+
+class ComparisonProfileRegistry:
+    """Loads reusable comparison policies; pages arrive in each request."""
+
+    def __init__(self, root: Path):
+        self.root = root
+        self._profiles: dict[str, ComparisonProfile] = {}
+
+    def load(self) -> ComparisonProfileRegistry:
+        profiles = [
+            ComparisonProfile.model_validate(yaml.safe_load(path.read_text(encoding="utf-8")))
+            for path in sorted(self.root.glob("*.yaml"))
+        ]
+        StandardsRegistry._reject_duplicate_ids(profiles, "benchmark profile")
+        self._profiles = {item.id: item for item in profiles}
+        return self
+
+    def get(self, profile_id: str) -> ComparisonProfile:
+        try:
+            return self._profiles[profile_id]
+        except KeyError as error:
+            raise ValueError(f"Unknown benchmark profile: {profile_id}") from error
+
+    def all(self) -> list[ComparisonProfile]:
+        return list(self._profiles.values())
 
 
 class PageMapRegistry:

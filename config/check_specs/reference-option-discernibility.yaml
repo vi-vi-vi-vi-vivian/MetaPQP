@@ -1,0 +1,11 @@
+id: reference-option-discernibility
+version: 1.0.0
+title: 对比选项可辨性
+description: 检查同一决策场景中的方案、套餐或版本是否可借鉴参考页面的量化差异与选择引导。
+scope: comparison
+tags: [comparison, decision]
+applies_when: {dimensions: [option_discernibility], page_roles: [awareness, purchase]}
+required_evidence: [visible_text, evidence_elements]
+executor: {type: model_skill, capability_id: competitive-opportunity-discovery}
+default_severity: p2
+standard_refs: [{criterion_id: metapqp-internal/reference-option-discernibility, relation: implements}]

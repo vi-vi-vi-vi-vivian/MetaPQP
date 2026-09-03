@@ -1,0 +1,7 @@
+id: competitive-opportunity-discovery
+version: 1.0.0
+kind: skill
+modality: text
+supported_scopes: [comparison]
+required_evidence: [visible_text, evidence_elements]
+implementation: {skill_id: competitive-opportunity-discovery}

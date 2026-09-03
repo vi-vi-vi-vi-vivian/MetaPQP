@@ -117,7 +117,13 @@ class OpenRouterModelAdapter:
                         json=payload,
                     )
                     if response.status_code not in RETRYABLE_STATUS_CODES:
-                        response.raise_for_status()
+                        if response.is_error:
+                            detail = response.text.strip().replace("\n", " ")[:2_000]
+                            raise httpx.HTTPStatusError(
+                                f"OpenRouter HTTP {response.status_code}: {detail or 'empty response body'}",
+                                request=response.request,
+                                response=response,
+                            )
                         return response
                     last_error = httpx.HTTPStatusError(
                         f"retryable OpenRouter HTTP {response.status_code}",

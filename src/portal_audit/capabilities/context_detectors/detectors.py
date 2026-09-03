@@ -18,9 +18,9 @@ class JourneyStageDetector:
                 [
                     "套餐",
                     "方案比较",
-                    "订阅 token plan",
-                    "subscription service",
-                    "resourceplanmanagement",
+                    "订阅服务",
+                    "subscription plan",
+                    "subscribe to",
                 ],
             ),
             ("usage", ["控制台", "资源管理", "console"]),
@@ -66,9 +66,10 @@ class PageArchetypeDetector:
                 "product_landing",
                 "立即订阅" in text
                 or "/product/" in url
-                or "tokenplan" in url
-                or "resourceplanmanagement" in url
-                or "subscribe to token plan" in text,
+                or "订阅服务" in text
+                or "subscription service" in text
+                or "subscription plan" in text
+                or "subscribe to" in text,
             ),
             ("console_page", "console." in url),
         ]

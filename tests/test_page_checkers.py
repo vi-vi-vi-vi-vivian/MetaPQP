@@ -290,8 +290,8 @@ async def test_image_alt_gives_actionable_logo_guidance():
     result = await ImageAltChecker().execute(spec, snapshot)
 
     assert result.status == "fail"
-    assert 'alt="智果园"' in result.suggestion
-    assert 'aria-label="智果园首页"' in result.suggestion
+    assert 'alt="产品首页"' in result.suggestion
+    assert 'aria-label="返回产品首页"' in result.suggestion
 
 
 async def test_runtime_checker_requires_impact_verification_for_console_errors():

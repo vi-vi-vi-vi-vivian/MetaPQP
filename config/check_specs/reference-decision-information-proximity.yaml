@@ -1,0 +1,11 @@
+id: reference-decision-information-proximity
+version: 1.0.0
+title: 对比关键决策信息邻近性
+description: 检查价格、优惠、限制、适用条件等关键决策信息是否可借鉴参考页面在决策点附近披露的做法。
+scope: comparison
+tags: [comparison, decision]
+applies_when: {dimensions: [decision_info_proximity], page_roles: [awareness, purchase]}
+required_evidence: [visible_text, evidence_elements]
+executor: {type: model_skill, capability_id: competitive-opportunity-discovery}
+default_severity: p2
+standard_refs: [{criterion_id: metapqp-internal/reference-decision-information-proximity, relation: implements}]

@@ -1,3 +1,4 @@
+import base64
 import json
 from pathlib import Path
 
@@ -136,6 +137,29 @@ class FakeAuthProvider:
         )
 
 
+def _captured_snapshot(*, page_id, url, title, body_text):
+    return PageSnapshot(
+        page_id=page_id,
+        requested_url=url,
+        final_url=url,
+        title=title,
+        viewport={"width": 1440, "height": 1000},
+        document_size={"width": 1440, "height": 1400},
+        body_text=body_text,
+        evidence_elements=[
+            EvidenceElement(
+                element_ref="dom-content",
+                tag="h1",
+                text=title,
+                bounds={"x": 0, "y": 120, "width": 320, "height": 40},
+            )
+        ],
+        artifacts=[
+            ArtifactRef(kind="screenshot", path="/tmp/journey-snapshot.png", media_type="image/png")
+        ],
+    )
+
+
 class FakeJourneyBrowser:
     def __init__(self, resolver):
         self.resolver = resolver
@@ -143,24 +167,20 @@ class FakeJourneyBrowser:
     async def run_journey(self, *, steps, safety_profile, auth_session):
         del safety_profile, auth_session
         snapshots = [
-            PageSnapshot(
+            _captured_snapshot(
                 page_id=steps[0].start_target.page_id,
-                requested_url=steps[0].start_target.url,
-                final_url=steps[0].start_target.url,
+                url=steps[0].start_target.url,
                 title="TokenPlan",
-                viewport={"width": 1440, "height": 1000},
                 body_text="Token Plan 立即订阅",
             )
         ]
         traces = []
         for step in steps:
             transition = step.transition
-            end = PageSnapshot(
+            end = _captured_snapshot(
                 page_id=step.end_target.page_id,
-                requested_url=step.end_target.url,
-                final_url=step.end_target.url,
+                url=step.end_target.url,
                 title=f"TokenPlan {step.end_node.title}",
-                viewport={"width": 1440, "height": 1000},
                 body_text="Token Plan 套餐购买与确认",
             )
             action = ActionRecord(
@@ -502,6 +522,38 @@ def test_journey_writer_only_creates_annotated_screenshot_for_failure(tmp_path):
         passed,
         [page_result, comparison_page],
     ) == []
+
+
+def test_journey_writer_embeds_page_reports_and_evidence_for_portable_html(tmp_path):
+    page_dir = tmp_path / "page-report"
+    page_dir.mkdir()
+    (page_dir / "screenshots").mkdir()
+    (page_dir / "screenshots" / "page.svg").write_text(
+        "<svg xmlns='http://www.w3.org/2000/svg'></svg>", encoding="utf-8"
+    )
+    (page_dir / "report.html").write_text(
+        "<img src='screenshots/page.svg'><a href='screenshots/page.svg'>open</a>",
+        encoding="utf-8",
+    )
+    run_dir = tmp_path / "journey-run"
+    (run_dir / "screenshots").mkdir(parents=True)
+    Image.new("RGB", (12, 12), "white").save(run_dir / "screenshots" / "issue.png")
+    payload = {
+        "pages": [{"output_dir": str(page_dir)}],
+        "journey_check_runs": [
+            {"evidence_screenshots": [{"path": "screenshots/issue.png"}]}
+        ],
+    }
+
+    embedded = JourneyOutputWriter(tmp_path)._standalone_payload(payload, run_dir)
+
+    page_report = embedded["pages"][0]["embedded_report"]
+    decoded_report = base64.b64decode(page_report.split(",", 1)[1]).decode("utf-8")
+    assert "data:image/svg+xml;base64," in decoded_report
+    assert "screenshots/page.svg" not in decoded_report
+    assert embedded["journey_check_runs"][0]["evidence_screenshots"][0]["data_uri"].startswith(
+        "data:image/png;base64,"
+    )
 
 
 def test_journey_report_has_sidebar_and_issue_deep_link():

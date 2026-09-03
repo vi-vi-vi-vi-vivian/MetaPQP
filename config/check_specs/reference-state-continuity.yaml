@@ -1,0 +1,11 @@
+id: reference-state-continuity
+version: 1.0.0
+title: 对比状态连续性
+description: 检查可观察到的多步骤或跨页上下文中，是否可借鉴参考页面保留并回显用户已作选择的做法。
+scope: comparison
+tags: [comparison, continuity]
+applies_when: {dimensions: [state_continuity], page_roles: [awareness, purchase]}
+required_evidence: [visible_text, evidence_elements]
+executor: {type: model_skill, capability_id: competitive-opportunity-discovery}
+default_severity: p2
+standard_refs: [{criterion_id: metapqp-internal/reference-state-continuity, relation: implements}]

@@ -269,8 +269,8 @@ class ImageAltChecker:
             evidence=[item.selector or item.element_ref for item in evidence_items[:10]],
             locations=[element_location(item) for item in evidence_items[:10]],
             suggestion=(
-                "如果这是可点击 Logo，为图片添加准确 Alt（如 alt=\"智果园\"），"
-                "或为父链接添加动作明确的 aria-label（如 aria-label=\"智果园首页\"）；"
+                "如果这是可点击 Logo，为图片添加准确 Alt（如 alt=\"产品首页\"），"
+                "或为父链接添加动作明确的 aria-label（如 aria-label=\"返回产品首页\"）；"
                 "二者具备一个即可。其他图片控件按实际动作命名。"
                 if confirmed_failures
                 else "确认图片用途：信息图片提供等价文本，装饰图片使用空 Alt。"

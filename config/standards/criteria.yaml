@@ -86,6 +86,24 @@ criteria:
   - id: metapqp-internal/page-load
     source_id: metapqp-internal
     title: 页面应正常加载
+  - id: metapqp-internal/reference-outcome-visibility
+    source_id: metapqp-internal
+    title: 对比中可迁移的结果价值可视性
+  - id: metapqp-internal/reference-zero-cost-access
+    source_id: metapqp-internal
+    title: 对比中可迁移的低门槛体验入口
+  - id: metapqp-internal/reference-option-discernibility
+    source_id: metapqp-internal
+    title: 对比中可迁移的选项差异与选择引导
+  - id: metapqp-internal/reference-decision-information-proximity
+    source_id: metapqp-internal
+    title: 对比中可迁移的关键决策信息邻近披露
+  - id: metapqp-internal/reference-state-continuity
+    source_id: metapqp-internal
+    title: 对比中可迁移的选择状态连续性
+  - id: metapqp-internal/reference-commitment-boundary
+    source_id: metapqp-internal
+    title: 对比中可迁移的承诺边界告知
   - id: metapqp-internal/pricing-transparency
     source_id: metapqp-internal
     title: 价格、周期和资源量应能被独立核对

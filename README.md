@@ -120,9 +120,25 @@ meta-pqp audit \
   --auth required
 ```
 
+## 运行参考产品对比
+
+Comparison 以稳定的通用 CheckSpec 评估动态参考页面，不对产品做优劣排名；只有参考做法、当前缺口和可迁移用户收益都能由页面证据证明时，才报告“可借鉴改进机会”。结果写入 `output/comparisons/{benchmark-profile}/{job-id}/report.html`，是单文件报告：左侧目录跳转检查项，右侧展示问题、两侧页面截图和证据；未发现机会的检查项显示“通过”。
+
+```bash
+meta-pqp compare \
+  --subject-url 'https://www.huaweicloud.com/product/agentarts/officeace.html' \
+  --subject-product '华为云 OfficeAce' \
+  --reference-url 'https://www.workbuddy.cn/' \
+  --reference-product 'WorkBuddy' \
+  --device desktop \
+  --locale zh-CN
+```
+
+当前页和参考页始终由命令参数传入；可重复 `--reference-url` 以添加多个参考页面。`config/comparison_profiles/*.yaml` 只定义可复用的检查维度，六条首期规则放在 `config/check_specs/reference-*.yaml`，因此替换参考产品或新增目标产品不需要复制或改写 CheckSpec。
+
 默认使用 Playwright 安装的隔离 Chromium，headed 模式便于用户观察并随时终止；自动化或沙箱验证可增加 `--headless`。运行时不会回退或启动 `/Applications/Google Chrome.app`，因此隔离 Chromium 在受限沙箱中启动失败时会直接结束并报告浏览器不可用，不会触发 macOS 的 “Google Chrome quit unexpectedly” 弹窗。Journey 使用同一个 Browser Context 完成起点采集、白名单动作和终点采集，然后复用现有 Page Pipeline 检查两个快照。
 
-结果写入 `output/journeys/{journey-id}/{job-id}/`，其中 `report.html` 汇总安全停止、ActionRecord、Transition 检查和 Journey 跨阶段详细检查，并链接起点与终点 Page 报告。桌面报告使用固定左侧目录，可跳转到总览、页面、路径、具体问题和各类检查；窄屏下目录自动变为顶部横向导航。跨阶段规则确认发现问题时，报告会为所有参与比较的页面生成对照截图：实际存在的问题证据使用红框编号；描述“缺失”的页面只展示对应区域，不绘制会误导为问题元素的红框；无法定位到单一 DOM 元素时保留页面上下文并明确标注。通过、不适用、待确认和未执行的规则不生成截图。当前启用 9 条产品通用的跨阶段 CheckSpec，覆盖产品身份、商业条件、可选内容与权益、决策引导、操作预期、术语、选择状态、生命周期状态以及持续承诺与退出规则。规则不绑定固定阶段；CheckPlan 会按 `adjacent`、`anchor_to_each` 或 `all_observed` 生成具体页面比较实例。
+结果写入 `output/journeys/{journey-id}/{job-id}/`，其中 `report.html` 汇总安全停止、ActionRecord、Transition 检查和 Journey 跨阶段详细检查。Journey 报告是单文件交付件：跨阶段截图会内嵌为 data URI，起点与终点的 Page 报告及其本地图片也会内嵌，并通过“打开内嵌页面报告”在弹窗中查看。因此只复制 `report.html` 到另一台电脑，截图和页面级报告仍可正常显示；`audit.json` 仍保持外部路径，供程序处理使用。桌面报告使用固定左侧目录，可跳转到总览、页面、路径、具体问题和各类检查；窄屏下目录自动变为顶部横向导航。跨阶段规则确认发现问题时，报告会为所有参与比较的页面生成对照截图：实际存在的问题证据使用红框编号；描述“缺失”的页面只展示对应区域，不绘制会误导为问题元素的红框；无法定位到单一 DOM 元素时保留页面上下文并明确标注。通过、不适用、待确认和未执行的规则不生成截图。当前启用 9 条产品通用的跨阶段 CheckSpec，覆盖产品身份、商业条件、可选内容与权益、决策引导、操作预期、术语、选择状态、生命周期状态以及持续承诺与退出规则。规则不绑定固定阶段；CheckPlan 会按 `adjacent`、`anchor_to_each` 或 `all_observed` 生成具体页面比较实例。
 
 ### 自动登录
 
@@ -197,7 +213,7 @@ output/web/tokenplan/purchase/desktop/zh-CN/{job-id}/
 .venv/bin/python scripts/generate_audit_dashboard.py
 ```
 
-默认扫描 `output/web/**/audit.json` 并生成 `output/dashboard.html`。Dashboard 汇总页面数、场景数和问题等级，支持按模块、页面类型和风险筛选；每个场景可直接打开对应的 `report.html`。重新执行检查后再次运行该命令即可刷新数据，也可通过 `--input` 和 `--output` 指定其他目录。
+默认扫描 `output/web/**/audit.json` 并生成 `output/dashboard.html`。Dashboard 汇总页面数、场景数和问题等级，支持按模块、页面类型和风险筛选；每个场景可直接打开对应的 `report.html`。分组优先读取运行元数据，未提供时显示“—”；可通过 `--title`、`--subtitle`、`--input` 和 `--output` 自定义展示与目录。
 
 需要固定的浏览器地址时，启动本地 Dashboard 服务：
 

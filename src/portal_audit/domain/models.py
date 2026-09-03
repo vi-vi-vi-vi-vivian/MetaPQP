@@ -70,6 +70,7 @@ class CheckScope(StrEnum):
     PAGE = "page"
     TRANSITION = "transition"
     JOURNEY = "journey"
+    COMPARISON = "comparison"
 
 
 class ComparisonMode(StrEnum):
@@ -363,6 +364,7 @@ class CheckInvocation(BaseModel):
     invocation_id: str
     check_spec_id: str
     subject_node_ids: list[str]
+    reference_node_ids: list[str] = Field(default_factory=list)
     comparison_mode: ComparisonMode
     evidence_facets: list[str] = Field(default_factory=list)
 
@@ -458,6 +460,82 @@ class AuditResult(BaseModel):
     check_plan: CheckPlan
     assessment: PageAssessment
     model_calls: list[ModelCallRecord] = Field(default_factory=list)
+    output_dir: str | None = None
+
+
+class BenchmarkTarget(BaseModel):
+    """One observed product page in a dynamic comparison profile."""
+
+    id: str
+    product: str
+    url: str
+    page_role: str = "awareness"
+    page_surface: PageSurface = PageSurface.PORTAL
+
+
+class ComparisonProfile(BaseModel):
+    """Reusable policy only; page URLs are supplied by each comparison request."""
+
+    id: str
+    version: str = "1.0.0"
+    title: str
+    dimensions: list[str] = Field(min_length=1)
+
+
+class ComparisonRequest(BaseModel):
+    comparison_profile_id: str = "comparison-mvp"
+    subject: BenchmarkTarget
+    references: list[BenchmarkTarget] = Field(min_length=1)
+    device: str = "desktop"
+    locale: str = "zh-CN"
+    audit_profile: str = "comparison-mvp"
+
+
+class ComparisonAssessment(BaseModel):
+    check_runs: list[CheckRun] = Field(default_factory=list)
+    model_calls: list[ModelCallRecord] = Field(default_factory=list)
+    details: list[ComparisonFindingDetail] = Field(default_factory=list)
+
+
+class ComparisonPageEvidence(BaseModel):
+    target_id: str
+    product: str
+    url: str
+    title: str
+    body_text: str
+    headings: list[dict[str, Any]] = Field(default_factory=list)
+    elements: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class ComparisonEvidenceBundle(BaseModel):
+    subject: ComparisonPageEvidence
+    references: list[ComparisonPageEvidence] = Field(default_factory=list)
+
+
+class ComparisonDisplayEvidence(BaseModel):
+    target_id: str
+    product: str
+    content: str
+    element_refs: list[str] = Field(default_factory=list)
+
+
+class ComparisonFindingDetail(BaseModel):
+    check_spec_id: str
+    issue_description: str
+    subject_display: ComparisonDisplayEvidence
+    reference_displays: list[ComparisonDisplayEvidence] = Field(default_factory=list)
+    recommendation: str = ""
+
+
+class ComparisonResult(BaseModel):
+    job_id: str
+    request: ComparisonRequest
+    comparison_profile: ComparisonProfile
+    subject_result: AuditResult
+    reference_results: list[AuditResult] = Field(default_factory=list)
+    comparison_evidence: ComparisonEvidenceBundle
+    comparison_check_plan: CheckPlan
+    assessment: ComparisonAssessment
     output_dir: str | None = None
 
 

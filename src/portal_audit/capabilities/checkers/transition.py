@@ -70,8 +70,8 @@ class EntryAndResumeContinuityChecker(TransitionChecker):
         del start_snapshot
         final_url = end_snapshot.final_url.lower()
         body = end_snapshot.body_text.lower()
-        interrupted = "authui/login" in final_url or any(
-            marker in body for marker in ("登录华为云", "password login")
+        interrupted = bool(re.search(r"/(?:auth(?:entication)?/)?login(?:[/?#]|$)", final_url)) or any(
+            marker in body for marker in ("登录", "sign in", "password login")
         )
         return self.run(
             spec,

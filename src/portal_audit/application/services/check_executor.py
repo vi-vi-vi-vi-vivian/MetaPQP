@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-import logging
-
+from portal_audit.application.services.progress import ProgressReporter
 from portal_audit.domain.models import (
     CheckExecutionResult,
     CheckPlan,
@@ -20,8 +19,6 @@ from portal_audit.skill_runtime.batch_executor import BatchModelSkillExecutor
 from portal_audit.skill_runtime.executor import ModelSkillExecutor
 from portal_audit.skill_runtime.visual_executor import VisualBatchSkillExecutor
 
-logger = logging.getLogger(__name__)
-
 
 class CheckExecutor:
     def __init__(
@@ -31,12 +28,14 @@ class CheckExecutor:
         skill_executor: ModelSkillExecutor,
         batch_skill_executor: BatchModelSkillExecutor,
         visual_skill_executor: VisualBatchSkillExecutor | None = None,
+        progress: ProgressReporter | None = None,
     ):
         self.registry = registry
         self.checkers = checkers
         self.skill_executor = skill_executor
         self.batch_skill_executor = batch_skill_executor
         self.visual_skill_executor = visual_skill_executor
+        self.progress = progress or ProgressReporter()
 
     async def execute(
         self, plan: CheckPlan, snapshot: PageSnapshot, context: PageContext
@@ -69,11 +68,12 @@ class CheckExecutor:
                         batch.evidence_profile,
                     )
             except Exception as error:  # noqa: BLE001 - isolate third-party model failures
-                logger.warning(
-                    "Model batch %s failed (%s): %s",
-                    batch.batch_id,
-                    type(error).__name__,
-                    str(error)[:500],
+                self.progress.warning(
+                    "模型检查暂时不可用，本批检查将标记为未执行",
+                    (
+                        f"批次：{batch.batch_id}",
+                        f"原因：{type(error).__name__}",
+                    ),
                 )
                 skill_result = CheckExecutionResult(
                     check_runs=[

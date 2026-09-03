@@ -1,0 +1,11 @@
+id: reference-outcome-visibility
+version: 1.0.0
+title: 对比结果价值可视性
+description: 检查是否可借鉴参考页面在用户决策前直观展示使用后结果、产出或可理解价值的做法。
+scope: comparison
+tags: [comparison, outcome]
+applies_when: {dimensions: [outcome_visibility], page_roles: [awareness, purchase]}
+required_evidence: [visible_text, evidence_elements]
+executor: {type: model_skill, capability_id: competitive-opportunity-discovery}
+default_severity: p2
+standard_refs: [{criterion_id: metapqp-internal/reference-outcome-visibility, relation: implements}]

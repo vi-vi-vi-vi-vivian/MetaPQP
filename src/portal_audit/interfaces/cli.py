@@ -5,20 +5,25 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import sys
 from itertools import product
+from urllib.parse import urlparse
 
 from portal_audit.adapters.auth.huaweicloud import VALIDATION_URLS
+from portal_audit.application.services.evidence_gate import PageEvidenceCaptureError
 from portal_audit.application.services.page_surface import (
     portal_locale_from_url,
     resolve_page_surface,
 )
 from portal_audit.bootstrap import (
     build_auth_provider,
+    build_comparison_audit_runner,
     build_journey_audit_runner,
     build_page_audit_runner,
 )
 from portal_audit.domain.models import (
     AuthMode,
+    ComparisonRequest,
     JourneyAuditRequest,
     ModelExecutionMode,
     PageAuditRequest,
@@ -28,6 +33,7 @@ from portal_audit.domain.models import (
 from portal_audit.domain.registry import (
     CapabilityRegistry,
     CheckSpecRegistry,
+    ComparisonProfileRegistry,
     JourneyExecutorRegistry,
     JourneyRegistry,
     PageMapRegistry,
@@ -96,6 +102,15 @@ def build_parser() -> argparse.ArgumentParser:
         choices=[item.value for item in ModelExecutionMode],
         default=ModelExecutionMode.GROUPED.value,
     )
+    compare = subparsers.add_parser("compare", help="compare a subject page with dynamic reference pages")
+    compare.add_argument("--subject-url", required=True)
+    compare.add_argument("--reference-url", action="append", required=True, help="repeat for each reference page")
+    compare.add_argument("--subject-product")
+    compare.add_argument("--reference-product", action="append", help="optional names matching --reference-url order")
+    compare.add_argument("--comparison-profile", default="comparison-mvp")
+    compare.add_argument("--device", choices=["desktop"], default="desktop")
+    compare.add_argument("--locale", choices=DEFAULT_LOCALES, default="zh-CN")
+    compare.add_argument("--audit-profile", default="comparison-mvp")
     subparsers.add_parser("validate-config", help="validate all declarative registries")
     return parser
 
@@ -213,6 +228,24 @@ async def _run_audit(args: argparse.Namespace) -> int:
     return 0 if result.status.value == "completed" else 1
 
 
+async def _run_comparison(args: argparse.Namespace) -> int:
+    names = args.reference_product or []
+    if names and len(names) != len(args.reference_url):
+        raise ValueError("--reference-product must occur once for every --reference-url")
+    def target(prefix: str, url: str, product: str | None) -> dict:
+        host = urlparse(url).netloc.removeprefix("www.") or url
+        return {"id": f"{prefix}-{host.replace('.', '-')}", "product": product or host, "url": url}
+    result = await build_comparison_audit_runner().run(
+        ComparisonRequest(comparison_profile_id=args.comparison_profile,
+                          subject=target("subject", args.subject_url, args.subject_product),
+                          references=[target(f"reference-{index + 1}", url, names[index] if names else None) for index, url in enumerate(args.reference_url)],
+                          device=args.device, locale=args.locale, audit_profile=args.audit_profile)
+    )
+    print(json.dumps({"scope": "comparison", "job_id": result.job_id, "output_dir": result.output_dir,
+                      "opportunity_count": sum(item.status.value == "fail" for item in result.assessment.check_runs)}, ensure_ascii=False))
+    return 0
+
+
 def _validate_config() -> int:
     """Fail fast before a browser or model provider is started."""
     settings = Settings()
@@ -228,18 +261,25 @@ def _validate_config() -> int:
     JourneyRegistry(settings.config_root / "journeys", page_maps, transitions).load()
     SafetyProfileRegistry(settings.config_root / "safety_profiles").load()
     JourneyExecutorRegistry(settings.config_root / "journey_executors").load()
+    ComparisonProfileRegistry(settings.config_root / "comparison_profiles").load()
     print("Configuration is valid.")
     return 0
 
 
 def main() -> int:
     args = build_parser().parse_args()
-    if args.command == "page":
-        return asyncio.run(_run_page(args))
-    if args.command == "auth" and args.auth_command == "login":
-        return asyncio.run(_run_auth_login(args))
-    if args.command == "audit":
-        return asyncio.run(_run_audit(args))
-    if args.command == "validate-config":
-        return _validate_config()
-    return 2
+    try:
+        if args.command == "page":
+            return asyncio.run(_run_page(args))
+        if args.command == "auth" and args.auth_command == "login":
+            return asyncio.run(_run_auth_login(args))
+        if args.command == "audit":
+            return asyncio.run(_run_audit(args))
+        if args.command == "compare":
+            return asyncio.run(_run_comparison(args))
+        if args.command == "validate-config":
+            return _validate_config()
+        return 2
+    except PageEvidenceCaptureError as error:
+        print(f"错误：{error}", file=sys.stderr)
+        return 2

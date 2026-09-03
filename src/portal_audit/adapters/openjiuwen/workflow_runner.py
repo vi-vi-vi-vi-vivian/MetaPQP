@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
-from datetime import datetime
 
 from openjiuwen.core.session import WORKFLOW_EXECUTE_TIMEOUT
 from openjiuwen.core.workflow import (
@@ -16,14 +15,11 @@ from openjiuwen.core.workflow import (
 )
 
 from portal_audit.application.ports.repositories import AuditJobRepositoryPort
+from portal_audit.application.services.evidence_gate import PageEvidenceCaptureError
+from portal_audit.application.services.progress import ProgressReporter
+from portal_audit.application.services.run_ids import new_job_id
 from portal_audit.application.use_cases.run_page_audit import PageAuditPipeline
 from portal_audit.domain.models import AuditResult, PageAuditRequest
-
-
-def new_job_id() -> str:
-    """Return a locally readable, chronologically sortable run identifier."""
-
-    return datetime.now().astimezone().strftime("%Y%m%d-%H%M%S")
 
 
 def _state_envelope(predecessor: str):
@@ -47,6 +43,19 @@ def _end_envelope(io_state) -> dict:
     return {"output": io_state.get("persist")}
 
 
+def _evidence_capture_error(error: BaseException) -> PageEvidenceCaptureError | None:
+    """Extract the domain error after OpenJiuwen wraps a pipeline component error."""
+
+    current: BaseException | None = error
+    visited: set[int] = set()
+    while current is not None and id(current) not in visited:
+        if isinstance(current, PageEvidenceCaptureError):
+            return current
+        visited.add(id(current))
+        current = current.__cause__ or current.__context__
+    return None
+
+
 class PipelineStep(WorkflowComponent):
     def __init__(self, operation: Callable[[dict], Awaitable[dict]]):
         super().__init__()
@@ -67,10 +76,12 @@ class OpenJiuwenWorkflowRunner:
         repository: AuditJobRepositoryPort,
         *,
         timeout_seconds: float = 300,
+        progress: ProgressReporter | None = None,
     ):
         self.pipeline = pipeline
         self.repository = repository
         self.timeout_seconds = timeout_seconds
+        self.progress = progress or ProgressReporter()
         self.workflow = self._build_workflow()
 
     def _build_workflow(self) -> Workflow:
@@ -101,6 +112,14 @@ class OpenJiuwenWorkflowRunner:
 
     async def run(self, request: PageAuditRequest) -> AuditResult:
         job_id = new_job_id()
+        started_at = self.progress.task_start(
+            "MetaPQP 页面检查开始",
+            (
+                f"任务：{job_id}",
+                f"场景：{request.page_surface or '自动识别'} · {request.device} · {request.locale}",
+                f"目标：{request.url}",
+            ),
+        )
         self.repository.create(job_id, request.model_dump(mode="json"))
         self.repository.mark_running(job_id)
         try:
@@ -118,7 +137,24 @@ class OpenJiuwenWorkflowRunner:
                 raise RuntimeError("OpenJiuwen workflow completed without an audit result")
             result = AuditResult.model_validate(payload["result"])
             self.repository.complete(job_id, result.model_dump(mode="json"))
+            self.progress.task_complete(
+                "页面检查完成",
+                started_at,
+                (
+                    (
+                        f"结果：P1 {sum(item.severity.value == 'p1' for item in result.assessment.findings)} · "
+                        f"P2 {sum(item.severity.value == 'p2' for item in result.assessment.findings)}"
+                    ),
+                    f"报告：{result.output_dir}",
+                ),
+            )
             return result
         except Exception as exc:
+            evidence_error = _evidence_capture_error(exc)
+            if evidence_error is not None:
+                self.repository.fail(job_id, str(evidence_error))
+                self.progress.warning("页面采集不完整，后续检查已停止", (str(evidence_error),))
+                raise evidence_error from None
             self.repository.fail(job_id, f"{type(exc).__name__}: {exc}")
+            self.progress.warning("页面检查未完成", (f"原因：{type(exc).__name__}",))
             raise

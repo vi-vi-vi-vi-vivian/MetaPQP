@@ -1,11 +1,10 @@
 id: transaction-context-continuity
 version: 1.0.0
 title: 跳转前后产品上下文应保持连续
-description: 终点页面应保留 TokenPlan 或对应产品购买上下文，不应进入无关产品页面。
+description: 终点页面应保留与起点一致的产品或业务对象上下文，不应进入无关产品页面。
 scope: transition
 tags: [journey, transition, transaction]
-applies_when:
-  transition_ids: [tokenplan-awareness-to-purchase]
+applies_when: {}
 required_evidence: [transition_trace, start_snapshot, end_snapshot]
 executor: {type: deterministic, capability_id: transaction-context-continuity-checker}
 default_severity: p1

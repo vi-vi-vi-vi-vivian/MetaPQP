@@ -17,7 +17,7 @@ def test_standard_catalog_validates_all_checkspec_references():
 
     assert len(standards.sources) == 4
     assert standards.sources["huawei-cloud-design"].status == "reserved"
-    assert len(specs.all()) == 29
+    assert len(specs.all()) == 35
     assert all(
         any(ref.criterion_id.startswith("metapqp-internal/") for ref in spec.standard_refs)
         for spec in specs.all()

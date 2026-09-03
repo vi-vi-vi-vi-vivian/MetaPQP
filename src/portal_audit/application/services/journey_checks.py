@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import logging
 import re
 from collections import defaultdict
 from typing import Any
@@ -11,6 +10,7 @@ from typing import Any
 import yaml
 
 from portal_audit.application.ports.model import ModelPort, ModelRequest, TextContent
+from portal_audit.application.services.progress import ProgressReporter
 from portal_audit.domain.models import (
     AuditResult,
     CheckInvocation,
@@ -32,10 +32,8 @@ from portal_audit.domain.models import (
 from portal_audit.domain.registry import CheckSpecRegistry
 from portal_audit.skill_runtime.loader import SkillLoader
 
-LOGGER = logging.getLogger(__name__)
-
 FACET_KEYWORDS: dict[str, tuple[str, ...]] = {
-    "product_identity": ("产品", "服务", "product", "service", "modelarts"),
+    "product_identity": ("产品", "服务", "product", "service"),
     "commercial_terms": (
         "价格", "费用", "计费", "优惠", "折扣", "免费", "元", "￥", "$",
         "price", "billing", "discount", "free", "month", "year",
@@ -259,10 +257,12 @@ class JourneyCheckExecutor:
         registry: CheckSpecRegistry,
         model: ModelPort,
         skill_loader: SkillLoader,
+        progress: ProgressReporter | None = None,
     ):
         self.registry = registry
         self.model = model
         self.skill_loader = skill_loader
+        self.progress = progress or ProgressReporter()
 
     async def execute(
         self,
@@ -276,12 +276,10 @@ class JourneyCheckExecutor:
         request = self._request(plan, evidence)
         try:
             completion = await self.model.complete_json(request)
-        except Exception as error:
-            LOGGER.exception(
-                "Journey semantic model batch failed: provider=%s model=%s error=%s",
-                type(self.model).__name__,
-                getattr(self.model, "model", "unknown"),
-                type(error).__name__,
+        except Exception as error:  # noqa: BLE001 - isolate third-party model failures
+            self.progress.warning(
+                "跨阶段语义检查暂时不可用，本批检查将标记为未执行",
+                (f"原因：{type(error).__name__}",),
             )
             reason = "跨阶段语义模型暂不可用，本项未执行"
             return [self._error_run(item, reason) for item in plan.invocations], []
