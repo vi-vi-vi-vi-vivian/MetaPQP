@@ -319,17 +319,25 @@ def build_journey_audit_runner(settings: Settings | None = None) -> JourneyAudit
 
 def build_comparison_audit_runner(settings: Settings | None = None) -> ComparisonAuditRunner:
     settings = settings or Settings()
-    page_runner = build_page_audit_runner(settings)
+    progress = ProgressReporter(enabled=settings.progress_logs)
+    store = LocalArtifactStore(settings.output_root)
+    browser = PlaywrightBrowser(
+        store,
+        headless=settings.browser_headless,
+        timeout_ms=settings.browser_timeout_ms,
+        visual_audit_enabled=False,
+    )
+    baseline = BaselineCollector(browser, None)
     standards = StandardsRegistry(settings.config_root / "standards").load()
     capabilities = CapabilityRegistry(settings.config_root / "capabilities").load()
     specs = CheckSpecRegistry(settings.config_root / "check_specs", standards, capabilities).load()
     return ComparisonAuditRunner(
-        page_runner=page_runner,
+        baseline=baseline,
         profiles=ComparisonProfileRegistry(settings.config_root / "comparison_profiles").load(),
         evidence_builder=ComparisonEvidenceBuilder(),
         plan_builder=ComparisonCheckPlanBuilder(specs, settings.config_root / "audit_profiles"),
         executor=ComparisonCheckExecutor(specs, _build_model(settings, settings.text_model_profile), SkillLoader(settings.skills_root, capabilities)),
         assessment_builder=ComparisonAssessmentBuilder(),
         output_writer=ComparisonOutputWriter(settings.output_root),
-        progress=page_runner.progress,
+        progress=progress,
     )

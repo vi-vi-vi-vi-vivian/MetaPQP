@@ -28,3 +28,24 @@ def page_run_relative_dir(
         job_id,
     )
     return Path(*(_safe_segment(value) for value in values))
+
+
+def comparison_capture_relative_dir(
+    profile_id: str,
+    job_id: str,
+    role: str,
+    target: PageTarget,
+) -> Path:
+    """Return an isolated artifact path for one Comparison page capture."""
+
+    values = (
+        "comparisons",
+        profile_id,
+        job_id,
+        "captures",
+        role,
+        target.page_id,
+        target.device,
+        target.locale,
+    )
+    return Path(*(_safe_segment(value) for value in values))

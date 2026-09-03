@@ -9,7 +9,6 @@ import yaml
 
 from portal_audit.application.ports.model import ModelPort, ModelRequest, TextContent
 from portal_audit.domain.models import (
-    AuditResult,
     CheckInvocation,
     CheckPlan,
     CheckRun,
@@ -19,6 +18,7 @@ from portal_audit.domain.models import (
     ComparisonDisplayEvidence,
     ComparisonEvidenceBundle,
     ComparisonFindingDetail,
+    ComparisonPageCapture,
     ComparisonPageEvidence,
     ExecutionBatch,
     ExecutionBatchMode,
@@ -33,37 +33,110 @@ from portal_audit.skill_runtime.loader import SkillLoader
 class ComparisonEvidenceBuilder:
     """Project page results into complete, locator-preserving comparison evidence."""
 
-    def build(self, subject: AuditResult, references: list[AuditResult]) -> ComparisonEvidenceBundle:
+    def build(
+        self,
+        subject: ComparisonPageCapture,
+        references: list[ComparisonPageCapture],
+    ) -> ComparisonEvidenceBundle:
         return ComparisonEvidenceBundle(
             subject=self._page(subject),
             references=[self._page(item) for item in references],
         )
 
     @staticmethod
-    def _page(result: AuditResult) -> ComparisonPageEvidence:
-        snapshot = result.snapshot
+    def _page(capture: ComparisonPageCapture) -> ComparisonPageEvidence:
+        snapshot = capture.snapshot
+        elements = [
+            {
+                "element_ref": item.element_ref,
+                "tag": item.tag,
+                "text": item.text,
+                "href": item.href,
+                "bounds": item.bounds,
+            }
+            for item in snapshot.evidence_elements
+        ]
         return ComparisonPageEvidence(
-            target_id=result.target.page_id,
-            product=result.target.product or result.target.page_id,
+            target_id=capture.target.page_id,
+            product=capture.target.product or capture.target.page_id,
             url=snapshot.final_url,
             title=snapshot.title,
             body_text=snapshot.body_text,
             headings=snapshot.headings,
-            elements=[
-                {
-                    "element_ref": item.element_ref,
-                    "tag": item.tag,
-                    "selector": item.selector,
-                    "text": item.text,
-                    "href": item.href,
-                    "bounds": item.bounds,
-                    "alt": item.alt,
-                    "accessible_name": item.accessible_name,
-                    "surrounding_text": item.surrounding_text,
-                }
-                for item in snapshot.evidence_elements
-            ],
+            elements=elements,
+            regions=ComparisonEvidenceBuilder._regions(elements),
         )
+
+    @staticmethod
+    def _regions(elements: list[dict]) -> list[dict]:
+        """Group visible evidence by heading without discarding raw local evidence."""
+
+        ordered = sorted(
+            (item for item in elements if item.get("bounds")),
+            key=lambda item: float(item["bounds"].get("y", 0)),
+        )
+        anchors = [
+            item for item in ordered
+            if item.get("tag") in {"h1", "h2", "h3"} and str(item.get("text") or "").strip()
+        ]
+        buckets: list[dict] = [{"id": "region-top", "title": "页面顶部", "start_y": 0, "items": []}]
+        buckets.extend(
+            {
+                "id": f"region-{index + 1}",
+                "title": str(anchor["text"]),
+                "start_y": float(anchor["bounds"].get("y", 0)),
+                "items": [],
+            }
+            for index, anchor in enumerate(anchors)
+        )
+        for item in ordered:
+            y = float(item["bounds"].get("y", 0))
+            bucket = next(
+                (candidate for candidate in reversed(buckets) if y >= candidate["start_y"]),
+                buckets[0],
+            )
+            bucket["items"].append(item)
+        regions = []
+        for bucket in buckets:
+            facts = []
+            seen: set[tuple[str, str]] = set()
+            for item in bucket["items"]:
+                text, href = str(item.get("text") or "").strip(), str(item.get("href") or "")
+                if not text and not href:
+                    continue
+                key = (text, href)
+                if key in seen:
+                    continue
+                seen.add(key)
+                facts.append(
+                    {
+                        "element_ref": item["element_ref"],
+                        "tag": item["tag"],
+                        "text": text,
+                        "href": href or None,
+                    }
+                )
+            if facts:
+                regions.append(
+                    {
+                        "id": bucket["id"],
+                        "title": bucket["title"],
+                        "kind": ComparisonEvidenceBuilder._region_kind(bucket["title"], facts),
+                        "facts": facts,
+                    }
+                )
+        return regions
+
+    @staticmethod
+    def _region_kind(title: str, facts: list[dict]) -> str:
+        text = " ".join([title, *(str(item.get("text") or "") for item in facts)]).lower()
+        if any(word in text for word in ("套餐", "方案", "价格", "定价", "month", "year", "plan", "pricing")):
+            return "offer_selection"
+        if any(word in text for word in ("试用", "体验", "预览", "免费", "trial", "preview", "free")):
+            return "zero_cost_access"
+        if any(word in text for word in ("案例", "结果", "报告", "成果", "example", "result", "case")):
+            return "outcome_visibility"
+        return "general"
 
 
 class ComparisonCheckPlanBuilder:
@@ -155,11 +228,12 @@ class ComparisonCheckExecutor:
                 content=[TextContent(json.dumps({
                     "invocations": [item.model_dump(mode="json") for item in plan.invocations],
                     "checks": [{"id": item.id, "title": item.title, "description": item.description} for item in specs],
-                    "evidence": evidence.model_dump(mode="json"),
+                    "evidence": self._model_evidence(evidence),
                 }, ensure_ascii=False))],
                 schema=self._schema([item.id for item in specs]),
             )
         )
+
         raw_by_id = {item.get("check_spec_id"): item for item in completion.content.get("results", [])}
         runs: list[CheckRun] = []
         details: list[ComparisonFindingDetail] = []
@@ -180,13 +254,30 @@ class ComparisonCheckExecutor:
         ]
 
     @staticmethod
+    def _model_evidence(evidence: ComparisonEvidenceBundle) -> dict:
+        """Send compact region facts; full DOM remains local for verification and crops."""
+
+        def page(item: ComparisonPageEvidence) -> dict:
+            return {
+                "target_id": item.target_id,
+                "product": item.product,
+                "title": item.title,
+                "regions": item.regions,
+            }
+
+        return {
+            "subject": page(evidence.subject),
+            "references": [page(item) for item in evidence.references],
+        }
+
+    @staticmethod
     def _system_suffix() -> str:
-        return "\n\n你在做参考产品启发式检查，不判定谁更好。只有参考做法、主体缺口和可迁移用户收益均被页面证据证明时才返回 fail。fail 必须提供问题描述、主体展示内容、每个参考页展示内容、具体修改建议，以及双方 element_ref；置信度必须>=0.8。其他情况返回 pass 或 needs_verification。不得根据品牌、视觉偏好或无证据推断。所有文字使用简体中文。"
+        return "\n\n你在做参考产品启发式检查，不判定谁更好。只有参考做法、主体缺口和可迁移用户收益均被页面证据证明时才返回 fail。对于套餐、价格、权益、限制或方案选择类结论，双方引用必须来自相同的决策区域；全站导航或产品 Hero 的通用按钮不能替代套餐/方案区域。fail 必须提供问题描述、主体展示内容、每个参考页展示内容、具体修改建议，以及双方 element_ref；置信度必须>=0.8。其他情况返回 pass 或 needs_verification。不得根据品牌、视觉偏好或无证据推断。所有文字使用简体中文。"
 
     @staticmethod
     def _schema(spec_ids: list[str]) -> dict:
         display = {"type": "object", "additionalProperties": False, "required": ["target_id", "content", "element_refs"], "properties": {"target_id": {"type": "string"}, "content": {"type": "string"}, "element_refs": {"type": "array", "items": {"type": "string"}}}}
-        result = {"type": "object", "additionalProperties": False, "required": ["check_spec_id", "status", "issue_description", "evidence", "recommendation", "confidence", "subject_display", "reference_displays"], "properties": {"check_spec_id": {"type": "string", "enum": spec_ids}, "status": {"type": "string", "enum": ["pass", "fail", "needs_verification"]}, "issue_description": {"type": "string"}, "evidence": {"type": "array", "items": {"type": "string"}}, "recommendation": {"type": "string"}, "confidence": {"type": "number", "minimum": 0, "maximum": 1}, "subject_display": display, "reference_displays": {"type": "array", "items": display}}}
+        result = {"type": "object", "additionalProperties": False, "required": ["check_spec_id", "status", "issue_description", "confidence"], "properties": {"check_spec_id": {"type": "string", "enum": spec_ids}, "status": {"type": "string", "enum": ["pass", "fail", "needs_verification"]}, "issue_description": {"type": "string"}, "evidence": {"type": "array", "items": {"type": "string"}}, "recommendation": {"type": "string"}, "confidence": {"type": "number", "minimum": 0, "maximum": 1}, "subject_display": display, "reference_displays": {"type": "array", "items": display}}}
         return {"type": "object", "additionalProperties": False, "required": ["results"], "properties": {"results": {"type": "array", "minItems": len(spec_ids), "maxItems": len(spec_ids), "items": result}}}
 
     def _result(self, spec, raw: dict | None, evidence: ComparisonEvidenceBundle) -> tuple[CheckRun, ComparisonFindingDetail | None]:
@@ -234,7 +325,7 @@ class ComparisonCheckExecutor:
     @staticmethod
     def _locations(page: ComparisonPageEvidence, refs: list[str]) -> list[dict]:
         by_ref = {item.get("element_ref"): item for item in page.elements}
-        return [{key: item.get(key) for key in ("element_ref", "selector", "tag", "text", "href", "bounds")} for ref in refs if (item := by_ref.get(ref))]
+        return [{key: item.get(key) for key in ("element_ref", "tag", "text", "href", "bounds")} for ref in refs if (item := by_ref.get(ref))]
 
     @staticmethod
     def _unavailable(spec, reason: str = "文本模型未配置，未形成对比结论") -> CheckRun:

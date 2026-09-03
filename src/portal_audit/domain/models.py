@@ -505,6 +505,14 @@ class ComparisonPageEvidence(BaseModel):
     body_text: str
     headings: list[dict[str, Any]] = Field(default_factory=list)
     elements: list[dict[str, Any]] = Field(default_factory=list)
+    regions: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class ComparisonPageCapture(BaseModel):
+    """A page captured for Comparison without running a Page Audit."""
+
+    target: PageTarget
+    snapshot: PageSnapshot
 
 
 class ComparisonEvidenceBundle(BaseModel):
@@ -531,8 +539,8 @@ class ComparisonResult(BaseModel):
     job_id: str
     request: ComparisonRequest
     comparison_profile: ComparisonProfile
-    subject_result: AuditResult
-    reference_results: list[AuditResult] = Field(default_factory=list)
+    subject_capture: ComparisonPageCapture
+    reference_captures: list[ComparisonPageCapture] = Field(default_factory=list)
     comparison_evidence: ComparisonEvidenceBundle
     comparison_check_plan: CheckPlan
     assessment: ComparisonAssessment

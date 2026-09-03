@@ -30,7 +30,10 @@ class ComparisonOutputWriter:
         return root
 
     def _crops(self, result: ComparisonResult) -> dict[str, dict[str, str | None]]:
-        results = {item.target.page_id: item for item in [result.subject_result, *result.reference_results]}
+        results = {
+            item.target.page_id: item
+            for item in [result.subject_capture, *result.reference_captures]
+        }
         crops: dict[str, dict[str, str | None]] = {}
         for detail in result.assessment.details:
             entries = [detail.subject_display, *detail.reference_displays]
