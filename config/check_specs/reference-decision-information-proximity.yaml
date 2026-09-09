@@ -1,6 +1,6 @@
 id: reference-decision-information-proximity
 version: 1.0.0
-title: 对比关键决策信息邻近性
+title: 关键决策信息是否在选择前说清
 description: 检查价格、优惠、限制、适用条件等关键决策信息是否可借鉴参考页面在决策点附近披露的做法。
 scope: comparison
 tags: [comparison, decision]

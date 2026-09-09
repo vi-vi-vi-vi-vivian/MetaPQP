@@ -473,6 +473,15 @@ class BenchmarkTarget(BaseModel):
     page_surface: PageSurface = PageSurface.PORTAL
 
 
+class ComparisonCoverageGroup(BaseModel):
+    """A reader-facing group of reusable Comparison CheckSpecs."""
+
+    id: str
+    title: str
+    description: str
+    check_spec_ids: list[str] = Field(min_length=1)
+
+
 class ComparisonProfile(BaseModel):
     """Reusable policy only; page URLs are supplied by each comparison request."""
 
@@ -480,6 +489,8 @@ class ComparisonProfile(BaseModel):
     version: str = "1.0.0"
     title: str
     dimensions: list[str] = Field(min_length=1)
+    coverage_groups: list[ComparisonCoverageGroup] = Field(min_length=1)
+    not_covered: list[str] = Field(default_factory=list)
 
 
 class ComparisonRequest(BaseModel):

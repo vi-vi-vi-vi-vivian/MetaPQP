@@ -298,6 +298,23 @@ class ComparisonProfileRegistry:
             for path in sorted(self.root.glob("*.yaml"))
         ]
         StandardsRegistry._reject_duplicate_ids(profiles, "benchmark profile")
+        for profile in profiles:
+            StandardsRegistry._reject_duplicate_ids(
+                profile.coverage_groups, f"comparison coverage group in {profile.id}"
+            )
+            check_spec_ids = [
+                check_spec_id
+                for group in profile.coverage_groups
+                for check_spec_id in group.check_spec_ids
+            ]
+            duplicates = sorted(
+                {item for item in check_spec_ids if check_spec_ids.count(item) > 1}
+            )
+            if duplicates:
+                raise ValueError(
+                    f"Comparison profile {profile.id} maps CheckSpecs to multiple coverage groups: "
+                    f"{', '.join(duplicates)}"
+                )
         self._profiles = {item.id: item for item in profiles}
         return self
 

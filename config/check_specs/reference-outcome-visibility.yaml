@@ -1,6 +1,6 @@
 id: reference-outcome-visibility
 version: 1.0.0
-title: 对比结果价值可视性
+title: 结果价值是否清晰可见
 description: 检查是否可借鉴参考页面在用户决策前直观展示使用后结果、产出或可理解价值的做法。
 scope: comparison
 tags: [comparison, outcome]

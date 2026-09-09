@@ -1,6 +1,6 @@
 id: reference-commitment-boundary
 version: 1.0.0
-title: 对比承诺边界披露
+title: 承诺与限制是否提前说明
 description: 检查能力限制、前置条件、计费或风险边界是否可借鉴参考页面在用户操作前清楚告知的做法。
 scope: comparison
 tags: [comparison, commitment]

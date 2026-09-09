@@ -1,6 +1,6 @@
 id: reference-option-discernibility
 version: 1.0.0
-title: 对比选项可辨性
+title: 方案选择是否清晰
 description: 检查同一决策场景中的方案、套餐或版本是否可借鉴参考页面的量化差异与选择引导。
 scope: comparison
 tags: [comparison, decision]

@@ -66,15 +66,15 @@ class ComparisonAuditRunner:
             return ComparisonPageCapture(target=page_target, snapshot=snapshot)
 
         # One browser page at a time: stable on macOS and comparison does not benefit from parallel capture.
-        subject_started_at = progress.stage_start("1/5 采集本产品页面", "正在采集本产品的对比证据……")
+        subject_started_at = progress.stage_start("1/5 收集本产品页面信息", "正在收集本产品的体验证据……")
         subject = await capture(request.subject, "subject")
         progress.stage_complete(subject_started_at, (f"已完成：{subject.target.product or subject.target.page_id}",))
-        references_started_at = progress.stage_start("2/5 采集参考产品页面", "正在逐个采集参考产品的对比证据……")
+        references_started_at = progress.stage_start("2/5 收集参考产品页面信息", "正在逐个收集可借鉴的参考做法……")
         references = []
         for index, target in enumerate(request.references, start=1):
             references.append(await capture(target, f"reference-{index}"))
         progress.stage_complete(references_started_at, (f"已完成：{len(references)} 个参考页面",))
-        evidence_started_at = progress.stage_start("3/5 建立对比证据", "正在整理双方可定位的页面内容……")
+        evidence_started_at = progress.stage_start("3/5 整理双方可比信息", "正在确认双方页面内容可被公平比较……")
         try:
             for result in [subject, *references]:
                 self.evidence_gate.ensure(result.target, result.snapshot)
@@ -86,7 +86,7 @@ class ComparisonAuditRunner:
             evidence_started_at,
             (f"本产品元素：{len(evidence.subject.elements)} 个", f"参考页面：{len(evidence.references)} 个"),
         )
-        check_started_at = progress.stage_start("4/5 执行对比规则", "正在寻找可迁移的体验改进机会……")
+        check_started_at = progress.stage_start("4/5 按六项体验检查进行比较", "正在寻找可迁移的体验改进机会……")
         plan = self.plan_builder.build(request.audit_profile, profile.dimensions, evidence)
         check_runs, details, model_calls = await self.executor.execute(plan, evidence)
         assessment = self.assessment_builder.build(check_runs, details, model_calls)
@@ -98,7 +98,7 @@ class ComparisonAuditRunner:
             ),
         )
         result = ComparisonResult(job_id=job_id, request=request, comparison_profile=profile, subject_capture=subject, reference_captures=references, comparison_evidence=evidence, comparison_check_plan=plan, assessment=assessment)
-        report_started_at = progress.stage_start("5/5 生成对比报告", "正在生成问题说明与局部截图对照……")
+        report_started_at = progress.stage_start("5/5 输出带证据的对比报告", "正在生成问题说明与局部截图对照……")
         result.output_dir = str(self.output_writer.write(result))
         progress.stage_complete(report_started_at, (f"报告：{result.output_dir}",))
         progress.task_complete("竞品对比检查完成", started_at)

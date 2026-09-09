@@ -94,7 +94,34 @@ dimensions:
   - decision_info_proximity
   - state_continuity
   - commitment_boundary
+
+coverage_groups:
+  - id: value-discovery
+    title: 认识价值
+    description: 用户能否快速理解产品带来的结果，并在决策前接触核心价值。
+    check_spec_ids:
+      - reference-outcome-visibility
+      - reference-zero-cost-access
+  - id: decision-making
+    title: 评估并选择
+    description: 用户能否看懂方案差异，并在作出选择前获得必要信息。
+    check_spec_ids:
+      - reference-option-discernibility
+      - reference-decision-information-proximity
+  - id: commitment-and-use
+    title: 确认并开始使用
+    description: 用户能否在承诺前了解限制，并在后续步骤中保留已有选择。
+    check_spec_ids:
+      - reference-commitment-boundary
+      - reference-state-continuity
+
+not_covered:
+  - 完整任务步骤效率与操作响应
+  - 受阻场景的引导与恢复
+  - 跨渠道承诺一致性
 ```
+
+`coverage_groups` 只决定报告中的读者视角，不改变 CheckSpec 的执行、证据或判定逻辑。每条已启用 CheckSpec 只能属于一个分组；报告按“认识价值 → 评估并选择 → 确认并开始使用”呈现覆盖范围与结果，并明确列出当前未覆盖的范围。
 
 主体由 `--subject-url` 指定，参考页通过一个或多个 `--reference-url` 指定；产品名可选，缺省时采用 URL 域名。多个参考页面不是“多数投票”；模型只选择证据完整、与主体最可比且不与其他参考明显冲突的做法。
 

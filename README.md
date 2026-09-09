@@ -134,7 +134,7 @@ meta-pqp compare \
   --locale zh-CN
 ```
 
-当前页和参考页始终由命令参数传入；可重复 `--reference-url` 以添加多个参考页面。`config/comparison_profiles/*.yaml` 只定义可复用的检查维度，六条首期规则放在 `config/check_specs/reference-*.yaml`，因此替换参考产品或新增目标产品不需要复制或改写 CheckSpec。
+当前页和参考页始终由命令参数传入；可重复 `--reference-url` 以添加多个参考页面。`config/comparison_profiles/*.yaml` 定义可复用的检查维度及报告中的用户决策路径分组；六条首期规则放在 `config/check_specs/reference-*.yaml`，因此替换参考产品或新增目标产品不需要复制或改写 CheckSpec。报告将已启用规则组织为“认识价值 → 评估并选择 → 确认并开始使用”，并明确列出当前未覆盖的体验范围。
 
 默认使用 Playwright 安装的隔离 Chromium，headed 模式便于用户观察并随时终止；自动化或沙箱验证可增加 `--headless`。运行时不会回退或启动 `/Applications/Google Chrome.app`，因此隔离 Chromium 在受限沙箱中启动失败时会直接结束并报告浏览器不可用，不会触发 macOS 的 “Google Chrome quit unexpectedly” 弹窗。Journey 使用同一个 Browser Context 完成起点采集、白名单动作和终点采集，然后复用现有 Page Pipeline 检查两个快照。
 

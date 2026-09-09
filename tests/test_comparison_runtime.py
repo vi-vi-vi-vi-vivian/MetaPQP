@@ -14,7 +14,13 @@ from portal_audit.domain.models import (
     PageSnapshot,
     PageTarget,
 )
-from portal_audit.domain.registry import CapabilityRegistry, CheckSpecRegistry, StandardsRegistry
+from portal_audit.domain.registry import (
+    CapabilityRegistry,
+    CheckSpecRegistry,
+    ComparisonProfileRegistry,
+    StandardsRegistry,
+)
+from portal_audit.interfaces.reporting.comparison_output_writer import ComparisonOutputWriter
 
 ROOT = Path(__file__).parents[1]
 
@@ -87,3 +93,62 @@ def test_comparison_model_evidence_uses_compact_decision_regions():
     assert "dom-2" in encoded
     assert "selector" not in encoded
     assert "surrounding_text" not in encoded
+
+
+def test_comparison_profile_groups_each_enabled_check_into_a_decision_path():
+    profile = ComparisonProfileRegistry(ROOT / "config/comparison_profiles").load().get(
+        "comparison-mvp"
+    )
+
+    assert [group.title for group in profile.coverage_groups] == [
+        "认识价值",
+        "评估并选择",
+        "确认并开始使用",
+    ]
+    grouped = [
+        check_spec_id
+        for group in profile.coverage_groups
+        for check_spec_id in group.check_spec_ids
+    ]
+    assert len(grouped) == len(set(grouped)) == len(profile.dimensions)
+
+
+def test_comparison_report_explains_coverage_with_business_titles(tmp_path):
+    standards = StandardsRegistry(ROOT / "config/standards").load()
+    capabilities = CapabilityRegistry(ROOT / "config/capabilities").load()
+    specs = CheckSpecRegistry(ROOT / "config/check_specs", standards, capabilities).load()
+    profile = ComparisonProfileRegistry(ROOT / "config/comparison_profiles").load().get(
+        "comparison-mvp"
+    )
+    check_spec_ids = [
+        check_spec_id
+        for group in profile.coverage_groups
+        for check_spec_id in group.check_spec_ids
+    ]
+    report = ComparisonOutputWriter(tmp_path)._html(
+        {
+            "comparison_profile": profile.model_dump(mode="json"),
+            "assessment": {
+                "check_runs": [
+                    {
+                        "check_spec_id": check_spec_id,
+                        "title": specs.get(check_spec_id).title,
+                        "status": "fail" if check_spec_id == check_spec_ids[0] else "pass",
+                        "reason": "测试结论",
+                    }
+                    for check_spec_id in check_spec_ids
+                ],
+                "details": [],
+            },
+            "comparison_crops": {},
+        }
+    )
+
+    assert "沿用户决策路径检查体验" in report
+    assert "本次已覆盖 6 项体验检查" in report
+    assert "认识价值" in report
+    assert "评估并选择" in report
+    assert "确认并开始使用" in report
+    assert "当前未覆盖" in report
+    assert "方案选择是否清晰" in report
+    assert "对比选项可辨性" not in report
