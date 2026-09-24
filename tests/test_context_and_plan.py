@@ -75,6 +75,7 @@ def test_check_plan_selects_atomic_capabilities_from_context():
     assert set(selected) == {
         "page-load",
         "document-structure",
+        "page-title-identity-consistency",
         "runtime-errors",
         "broken-links",
         "product-value-clarity",
@@ -84,6 +85,7 @@ def test_check_plan_selects_atomic_capabilities_from_context():
         "content-internal-consistency",
         "pricing-transparency",
         "image-alt",
+        "visible-image-load-failure",
     }
     assert selected["product-value-clarity"].executor.capability_id == "product-value"
     assert selected["cta-clarity"].executor.capability_id == "cta-clarity"
@@ -120,7 +122,7 @@ def test_check_plan_can_preserve_one_model_call_per_skill_for_comparison():
 
     plan = builder.build(request, resolver.resolve(request, product_snapshot()))
 
-    assert len(plan.execution_batches) == 7
+    assert len(plan.execution_batches) == 8
     assert plan.execution_batches[0].mode == ExecutionBatchMode.LOCAL
     assert all(
         batch.mode == ExecutionBatchMode.MODEL_SINGLE for batch in plan.execution_batches[1:]
@@ -147,7 +149,7 @@ def test_mobile_plan_adds_device_specific_deterministic_checks():
 
     selected = {item.check_spec_id for item in plan.selected}
     assert {"mobile-horizontal-overflow", "mobile-tap-target-size"} <= selected
-    assert len(selected) == 16
+    assert len(selected) == 18
     assert {
         "mobile-horizontal-overflow",
         "mobile-tap-target-size",

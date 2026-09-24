@@ -174,6 +174,7 @@ async def test_password_login_fills_visible_inputs_in_multi_mode_form(tmp_path):
     visible_password = MagicMock()
     visible_password.is_visible = AsyncMock(return_value=True)
     visible_password.fill = AsyncMock()
+    visible_password.press = AsyncMock()
     username_locator = MagicMock()
     username_locator.count = AsyncMock(return_value=2)
     username_locator.nth.side_effect = [hidden_username, visible_username]
@@ -181,6 +182,7 @@ async def test_password_login_fills_visible_inputs_in_multi_mode_form(tmp_path):
     password_locator.count = AsyncMock(return_value=2)
     password_locator.nth.side_effect = [hidden_password, visible_password]
     page = MagicMock()
+    page.wait_for_timeout = AsyncMock()
     page.locator.side_effect = [username_locator, password_locator]
 
     filled = await provider._fill_credentials(page)
@@ -188,6 +190,25 @@ async def test_password_login_fills_visible_inputs_in_multi_mode_form(tmp_path):
     assert filled is True
     visible_username.fill.assert_awaited_once_with("test-user")
     visible_password.fill.assert_awaited_once_with("test-password")
+    visible_password.press.assert_awaited_once_with("Tab")
+    page.wait_for_timeout.assert_awaited_once_with(150)
+
+
+async def test_password_login_prefers_the_current_huawei_widget_submit_control(tmp_path):
+    provider = HuaweiCloudAuthProvider(
+        username="test-user", password="test-password", state_path=tmp_path / "auth.json"
+    )
+    widget_submit = MagicMock()
+    widget_submit.is_visible = AsyncMock(return_value=True)
+    widget_submit.click = AsyncMock()
+    page = MagicMock()
+    page.locator.return_value = MagicMock(count=AsyncMock(return_value=1), nth=MagicMock(return_value=widget_submit))
+
+    await provider._submit(page)
+
+    page.locator.assert_called_once_with('[ht="click_pwdlogin_submitLogin"]')
+    widget_submit.click.assert_awaited_once()
+    page.get_by_text.assert_not_called()
 
 
 async def test_baseline_passes_authenticated_session_without_exposing_storage_state():
@@ -201,11 +222,30 @@ async def test_baseline_passes_authenticated_session_without_exposing_storage_st
     assert "storage_state" not in snapshot.model_dump(mode="json")
 
 
-async def test_required_authentication_stops_before_page_capture():
+async def test_baseline_preserves_authentication_refreshed_during_capture():
+    browser = FakeBrowser()
+
+    async def refreshed_capture(page_target, run_id, auth_session=None):
+        snapshot = await FakeBrowser.capture(browser, page_target, run_id, auth_session)
+        snapshot.authentication = AuthenticationSummary(
+            provider="fake", status=AuthStatus.AUTHENTICATED, source="password"
+        )
+        return snapshot
+
+    browser.capture = refreshed_capture
+    collector = BaselineCollector(browser, FakeAuthProvider(AuthStatus.AUTHENTICATED))
+
+    snapshot = await collector.collect(target(), "run", AuthMode.AUTO)
+
+    assert snapshot.authentication.source == "password"
+
+
+@pytest.mark.parametrize('mode', [AuthMode.AUTO, AuthMode.REQUIRED])
+async def test_required_authentication_stops_before_page_capture(mode):
     browser = FakeBrowser()
     collector = BaselineCollector(browser, FakeAuthProvider(AuthStatus.CHALLENGE_REQUIRED))
 
-    with pytest.raises(AuthenticationRequiredError, match="test"):
-        await collector.collect(target(), "run", AuthMode.REQUIRED)
+    with pytest.raises(AuthenticationRequiredError, match="已暂停"):
+        await collector.collect(target(), "run", mode)
 
     assert browser.received_session is None

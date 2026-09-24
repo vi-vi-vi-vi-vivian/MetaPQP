@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 
 from portal_audit.domain.models import (
+    ArtifactRef,
     CheckRun,
     CheckStatus,
     ElementLocation,
@@ -83,6 +84,46 @@ def test_output_writer_records_real_model_usage_without_duplication(tmp_path):
     assert execution["calls"][0]["check_spec_ids"] == ["copy-quality"]
 
 
+def test_output_writer_exports_effective_model_prompts_as_review_documents(tmp_path):
+    result = make_result(job_id="prompt-export")
+    result.model_calls.append(
+        ModelCallRecord(
+            provider="fake",
+            batch_id="content-understanding",
+            check_spec_ids=["copy-quality"],
+            model="test-model",
+            prompt_trace={
+                "system": "只依据页面证据。",
+                "content": [
+                    {"type": "text", "text": '{"page":{"title":"示例"}}'},
+                    {
+                        "type": "image",
+                        "artifact_ref": "screenshots/page.png",
+                        "media_type": "image/png",
+                        "bytes": 123,
+                        "width": None,
+                        "height": None,
+                    },
+                ],
+                "response_schema": {"type": "object"},
+            },
+        )
+    )
+    writer = OutputWriter(tmp_path, model_name="test-model", model_enabled=True)
+
+    run_dir = writer.write(result)
+    prompt_document = (run_dir / "artifacts" / "model-prompts.md").read_text(encoding="utf-8")
+    prompt_data = json.loads((run_dir / "artifacts" / "model-prompts.json").read_text(encoding="utf-8"))
+    payload = json.loads((run_dir / "audit.json").read_text(encoding="utf-8"))
+
+    assert "只依据页面证据。" in prompt_document
+    assert '"title":"示例"' in prompt_document
+    assert "screenshots/page.png" in prompt_document
+    assert prompt_data["calls"][0]["prompt_trace"]["response_schema"] == {"type": "object"}
+    assert payload["run"]["model_execution"]["prompt_document"] == "artifacts/model-prompts.md"
+    assert "prompt_trace" not in payload["run"]["model_execution"]["calls"][0]
+
+
 def test_output_writer_emits_json_locations_and_annotated_evidence_map(tmp_path):
     result = make_result(job_id="audit-located", artifact_root=tmp_path)
     result.snapshot.document_size = {"width": 1440, "height": 2400}
@@ -135,6 +176,29 @@ def test_output_writer_emits_json_locations_and_annotated_evidence_map(tmp_path)
     assert (run_dir / issue["annotated_screenshot"]).is_file()
     assert "问题证据地图" in report
     assert "在截图中查看定位框" in report
+
+
+def test_evidence_map_only_includes_segments_that_contain_a_finding(tmp_path):
+    from PIL import Image
+
+    screenshots = tmp_path / "screenshots"
+    screenshots.mkdir()
+    first, second = screenshots / "page-segment-1.png", screenshots / "page-segment-2.png"
+    Image.new("RGB", (200, 100), "white").save(first)
+    Image.new("RGB", (200, 100), "white").save(second)
+    writer = OutputWriter(tmp_path, model_name="", model_enabled=False)
+
+    evidence = writer._evidence_screenshots(
+        tmp_path,
+        [
+            ArtifactRef(kind="screenshot_segment", path=str(first), media_type="image/png", metadata={"top": 0, "width": 200, "height": 100}),
+            ArtifactRef(kind="screenshot_segment", path=str(second), media_type="image/png", metadata={"top": 100, "width": 200, "height": 100}),
+        ],
+        [{"marker": 1, "severity": "p2", "locations": [{"bounds": {"x": 10, "y": 120, "width": 20, "height": 10}}]}],
+    )
+
+    assert [item["label"] for item in evidence] == ["基础页面 · 区域 2"]
+    assert evidence[0]["path"].endswith("page-segment-2-annotated.svg")
 
 
 def test_standard_reference_html_names_wcag_and_nielsen_sources():

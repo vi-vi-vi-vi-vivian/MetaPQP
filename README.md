@@ -134,7 +134,35 @@ meta-pqp compare \
   --locale zh-CN
 ```
 
-当前页和参考页始终由命令参数传入；可重复 `--reference-url` 以添加多个参考页面。`config/comparison_profiles/*.yaml` 定义可复用的检查维度及报告中的用户决策路径分组；六条首期规则放在 `config/check_specs/reference-*.yaml`，因此替换参考产品或新增目标产品不需要复制或改写 CheckSpec。报告将已启用规则组织为“认识价值 → 评估并选择 → 确认并开始使用”，并明确列出当前未覆盖的体验范围。
+当前页和参考页始终由命令参数传入；可重复 `--reference-url` 以添加多个参考页面。`config/comparison_profiles/*.yaml` 定义可复用的检查维度、报告中的用户决策路径分组，以及模型请求编排策略；六条首期规则放在 `config/check_specs/reference-*.yaml`，因此替换参考产品或新增目标产品不需要复制或改写 CheckSpec。报告将已启用规则组织为“认识价值 → 评估并选择 → 确认并开始使用”，并明确列出当前未覆盖的体验范围。
+
+ComparisonProfile 的 `execution` 决定模型调用拓扑：`auto` 在友商数不超过 `all_references_max` 且预计输入不超过 `all_references_max_estimated_tokens` 时，将本产品和全部友商合入一个模型批次；否则按照 `coverage_groups` 的 `evidence_region_kinds` 只路由相关区域，通常形成“认识价值 / 评估并选择 / 确认并开始使用”三个批次。`pairwise` 仅用于需要逐家独立结论的场景，会运行 A vs B、A vs C 等批次。这个阈值只选择编排方式，不会截断本地保存的页面证据。
+
+可以临时覆盖 Profile 默认策略：
+
+```bash
+meta-pqp compare \
+  --subject-url 'https://example.com/product' \
+  --reference-url 'https://reference.example.com/product' \
+  --execution-strategy evidence_routed
+```
+
+## 使用本地控制台
+
+启动本地 Web 控制台：
+
+```bash
+meta-pqp ui
+```
+
+浏览器打开 <http://127.0.0.1:8765>。控制台提供三项本地能力：
+
+- 新建清单和 Page / Comparison / Journey 检查场景；场景保存为 `config/checklists/*.yaml`。
+- 以结构化字段编辑既有 CheckSpec，并保留高级 YAML 模式；保存前自动运行完整 CheckSpec 注册表校验，失败会恢复原文件。
+- 创建 Comparison 场景时选择默认、自动路由、全部合并或逐家对比策略。
+- 从清单启动检查、查看本次运行状态，并在完成后打开 `output/` 下的 HTML 报告。
+
+控制台默认仅监听 `127.0.0.1`，不会显示或编辑 `.env`、账号密码及浏览器登录态。Python 确定性检查器和 Capability manifest 仍应通过代码与 YAML 文件维护。
 
 默认使用 Playwright 安装的隔离 Chromium，headed 模式便于用户观察并随时终止；自动化或沙箱验证可增加 `--headless`。运行时不会回退或启动 `/Applications/Google Chrome.app`，因此隔离 Chromium 在受限沙箱中启动失败时会直接结束并报告浏览器不可用，不会触发 macOS 的 “Google Chrome quit unexpectedly” 弹窗。Journey 使用同一个 Browser Context 完成起点采集、白名单动作和终点采集，然后复用现有 Page Pipeline 检查两个快照。
 

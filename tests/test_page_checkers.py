@@ -85,8 +85,8 @@ async def test_broken_link_checker_treats_connect_timeout_as_unverified(monkeypa
     result = await BrokenLinksChecker().execute(spec, snapshot)
 
     assert result.status == "needs_verification"
-    assert "broken_links=0" in result.reason
-    assert "unverified_links=1" in result.reason
+    assert "确认失效 0 个" in result.reason
+    assert "1 个因网络请求失败未完成验证" in result.reason
     assert result.evidence == ["unverified http://www.huaweicloud.com/: ConnectTimeout"]
 
 
@@ -128,7 +128,7 @@ async def test_broken_link_checker_uses_get_when_head_returns_404(monkeypatch):
     result = await BrokenLinksChecker().execute(spec, snapshot)
 
     assert result.status == "pass"
-    assert "broken_links=0" in result.reason
+    assert "确认失效 0 个" in result.reason
 
 
 async def test_broken_link_checker_confirms_404_with_get(monkeypatch):
@@ -162,6 +162,82 @@ async def test_broken_link_checker_confirms_404_with_get(monkeypatch):
 
     assert result.status == "fail"
     assert result.evidence == ["404 https://example.test/missing"]
+
+
+async def test_broken_link_checker_prefers_authenticated_browser_probe(monkeypatch):
+    class NoNetworkClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        async def head(self, _url):
+            raise AssertionError("browser probe should avoid anonymous HEAD validation")
+
+    monkeypatch.setattr(page_checkers.httpx, "AsyncClient", lambda **kwargs: NoNetworkClient())
+    url = "https://console.example.test/agentarts/officeace_billing_detail"
+    snapshot = PageSnapshot(
+        page_id="links",
+        requested_url="https://example.test",
+        final_url="https://example.test",
+        title="Links",
+        viewport={"width": 1440, "height": 1000},
+        interactive_elements=[InteractiveElement(tag="a", text="计费详情", href=url)],
+        link_probe_results=[{"url": url, "status": 404, "source": "browser_context"}],
+    )
+
+    result = await BrokenLinksChecker().execute(
+        deterministic_spec("broken-links", "broken-links-checker"), snapshot
+    )
+
+    assert result.status == "fail"
+    assert result.evidence == [f"404 {url}"]
+
+
+async def test_broken_link_checker_does_not_truncate_disclosed_links(monkeypatch):
+    class LinkClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        async def head(self, url):
+            return httpx.Response(
+                404 if url.endswith("/detail") else 200,
+                request=httpx.Request("HEAD", url),
+            )
+
+        async def get(self, url, headers=None):
+            return httpx.Response(404, request=httpx.Request("GET", url))
+
+    monkeypatch.setattr(page_checkers.httpx, "AsyncClient", lambda **kwargs: LinkClient())
+    spec = deterministic_spec("broken-links", "broken-links-checker")
+    snapshot = PageSnapshot(
+        page_id="links",
+        requested_url="https://example.test",
+        final_url="https://example.test",
+        title="Links",
+        viewport={"width": 1440, "height": 1000},
+        interactive_elements=[
+            *[
+                InteractiveElement(tag="a", text=f"导航 {index}", href=f"https://example.test/{index}")
+                for index in range(20)
+            ],
+            InteractiveElement(
+                tag="a",
+                text="了解计费详情 → 查看规则",
+                href="https://example.test/detail",
+            ),
+        ],
+    )
+
+    result = await BrokenLinksChecker().execute(spec, snapshot)
+
+    assert result.status == "fail"
+    assert "共检查 21 个不同链接" in result.reason
+    assert result.evidence == ["404 https://example.test/detail"]
 
 
 async def test_broken_link_checker_treats_server_error_as_transient(monkeypatch):
@@ -198,7 +274,7 @@ async def test_broken_link_checker_treats_server_error_as_transient(monkeypatch)
     result = await BrokenLinksChecker().execute(spec, snapshot)
 
     assert result.status == "needs_verification"
-    assert "transient_server_errors=1" in result.reason
+    assert "1 个遇到服务器暂时异常" in result.reason
     assert result.evidence == ["521 https://beian.miit.gov.cn/"]
 
 

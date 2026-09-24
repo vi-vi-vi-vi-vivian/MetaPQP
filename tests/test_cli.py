@@ -73,3 +73,27 @@ def test_config_validation_command_is_available():
     args = build_parser().parse_args(["validate-config"])
 
     assert args.command == "validate-config"
+
+
+def test_ui_command_defaults_to_localhost():
+    args = build_parser().parse_args(["ui"])
+
+    assert args.command == "ui"
+    assert args.host == "127.0.0.1"
+    assert args.port == 8765
+
+
+def test_compare_cli_accepts_an_execution_strategy_override():
+    args = build_parser().parse_args(
+        [
+            "compare",
+            "--subject-url",
+            "https://subject.test",
+            "--reference-url",
+            "https://reference.test",
+            "--execution-strategy",
+            "evidence_routed",
+        ]
+    )
+
+    assert args.execution_strategy == "evidence_routed"

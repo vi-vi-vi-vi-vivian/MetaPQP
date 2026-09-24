@@ -7,6 +7,7 @@ from portal_audit.domain.models import (
     CheckSpec,
     EvidenceElement,
     ExecutorType,
+    InteractiveElement,
     PageContext,
     PageSnapshot,
 )
@@ -60,6 +61,14 @@ class FakeBatchModel:
             completion_tokens=160,
             total_tokens=1560,
         )
+
+
+class FailingBatchModel:
+    enabled = True
+    model = "broken-model"
+
+    async def complete_json(self, request):
+        raise RuntimeError("provider returned HTTP 429")
 
 
 def make_spec(check_spec_id: str) -> CheckSpec:
@@ -118,6 +127,29 @@ async def test_batch_executor_returns_atomic_runs_from_one_model_call():
     assert "selector" not in json.loads(model.user)["page"]["elements"][0]
 
 
+async def test_batch_executor_keeps_prompt_trace_when_provider_fails():
+    snapshot = PageSnapshot(
+        page_id="demo",
+        requested_url="https://example.test",
+        final_url="https://example.test",
+        title="Demo",
+        viewport={"width": 1440, "height": 1000},
+        body_text="页面正文",
+    )
+    result = await BatchModelSkillExecutor(
+        SkillLoader(ROOT / "skills"), FailingBatchModel()
+    ).execute(
+        "content-understanding",
+        [make_spec("copy-quality")],
+        snapshot,
+        PageContext(),
+    )
+
+    assert result.check_runs[0].status.value == "error"
+    assert result.model_calls[0].error_type == "RuntimeError"
+    assert result.model_calls[0].prompt_trace["content"][0]["text"]
+
+
 def test_model_evidence_projection_never_truncates_text_elements_or_alt():
     long_text = "页面正文" * 30000
     elements = [
@@ -147,3 +179,69 @@ def test_model_evidence_projection_never_truncates_text_elements_or_alt():
     assert projection["elements"][-1]["alt"] == "末尾信息图片"
     assert projection["coverage"]["truncated"] is False
     assert projection["coverage"]["source_counts"] == projection["coverage"]["included_counts"]
+
+
+def test_model_evidence_projection_excludes_chrome_and_default_browser_metadata():
+    snapshot = PageSnapshot(
+        page_id="purchase",
+        requested_url="https://example.test/purchase",
+        final_url="https://example.test/purchase",
+        title="购买 OfficeAce",
+        viewport={"width": 1440, "height": 1000},
+        body_text="OfficeAce 购买时长 3个月 立即订阅",
+        evidence_elements=[
+            EvidenceElement(
+                element_ref="nav-1",
+                tag="a",
+                text="所有服务",
+                href="https://example.test/services",
+                page_region="navigation",
+            ),
+            EvidenceElement(
+                element_ref="label-1",
+                tag="label",
+                text="购买时长",
+            ),
+            EvidenceElement(
+                element_ref="duration-1",
+                tag="div",
+                text="3个月",
+                accessible_name="",
+                enabled=True,
+                surrounding_text="个人高级版 / 购买时长 / 3个月",
+            ),
+            EvidenceElement(
+                element_ref="pay-1",
+                tag="button",
+                text="立即订阅",
+                surrounding_text="个人高级版 / 立即订阅",
+            ),
+            EvidenceElement(
+                element_ref="pay-2",
+                tag="button",
+                text="立即订阅",
+                surrounding_text="个人旗舰版 / 立即订阅",
+            ),
+        ],
+        interactive_elements=[
+            InteractiveElement(element_ref="duration-1", tag="div", text="3个月"),
+            InteractiveElement(element_ref="pay-1", tag="button", text="立即订阅"),
+            InteractiveElement(element_ref="pay-2", tag="button", text="立即订阅"),
+        ],
+    )
+
+    projection = ModelEvidenceCompactor().compact(snapshot, "transaction_evidence")
+    by_ref = {item["element_ref"]: item for item in projection["elements"]}
+
+    assert "nav-1" not in by_ref
+    assert by_ref["label-1"] == {"element_ref": "label-1", "text": "购买时长"}
+    assert by_ref["duration-1"] == {
+        "element_ref": "duration-1",
+        "text": "3个月",
+        "interactive": True,
+    }
+    assert by_ref["pay-1"]["tag"] == "button"
+    assert by_ref["pay-1"]["context"] == "个人高级版 / 立即订阅"
+    assert "enabled" not in by_ref["pay-1"]
+    assert projection["coverage"]["source_counts"]["evidence_elements"] == 5
+    assert projection["coverage"]["included_counts"]["evidence_elements"] == 4

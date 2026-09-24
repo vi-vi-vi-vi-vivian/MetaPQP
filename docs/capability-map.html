@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="MetaPQP 购买前体验检查能力覆盖地图。">
+  <title>MetaPQP · 产品检查能力地图</title>
+  <style>
+    :root {
+      --page: #f5f7fa;
+      --surface: #ffffff;
+      --ink: #172033;
+      --muted: #68748a;
+      --line: #d9e0e9;
+      --blue: #2459a9;
+      --blue-soft: #eaf1fb;
+      --teal: #197b72;
+      --teal-soft: #e6f3f1;
+      --amber: #aa6515;
+      --amber-soft: #fff2dc;
+      --violet: #665a91;
+      --violet-soft: #f0edf8;
+      --font: "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+      --mono: "SFMono-Regular", "Cascadia Code", monospace;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; color: var(--ink); background: var(--page); font-family: var(--font); font-size: 14px; line-height: 1.55; }
+    summary { font: inherit; }
+    :focus-visible { outline: 3px solid rgba(36, 89, 169, .25); outline-offset: 3px; }
+    .shell { width: min(1180px, calc(100% - 40px)); margin: 0 auto; }
+    header { height: 62px; display: flex; align-items: center; justify-content: space-between; gap: 20px; border-bottom: 1px solid var(--line); }
+    .brand { display: flex; align-items: center; gap: 10px; font-weight: 650; }
+    .brand-mark { width: 21px; height: 21px; border: 6px solid var(--blue); border-radius: 50%; }
+    .meta { color: var(--muted); font-family: var(--mono); font-size: 10px; }
+    main { padding: 26px 0 50px; }
+
+    .summary { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 30px; align-items: center; padding: 22px 25px; background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--blue); }
+    .summary-label { margin: 0 0 5px; color: var(--blue); font-size: 12px; font-weight: 650; }
+    h1 { margin: 0; font-size: clamp(23px, 2.7vw, 32px); line-height: 1.38; letter-spacing: -.02em; }
+    h1 span { color: var(--teal); }
+    .summary-facts { display: flex; gap: 8px; }
+    .fact { min-width: 92px; padding: 9px 12px; text-align: center; background: var(--page); border: 1px solid var(--line); }
+    .fact strong { display: block; font-size: 20px; line-height: 1.25; }
+    .fact small { color: var(--muted); font-size: 10px; }
+
+    .scope { margin-top: 15px; padding: 13px 18px; display: grid; grid-template-columns: auto 1fr; gap: 24px; align-items: center; background: #eef2f7; border: 1px solid var(--line); }
+    .scope b { font-size: 12px; }
+    .scope-flow { display: flex; align-items: center; justify-content: center; gap: 14px; color: var(--blue); font-weight: 650; }
+    .scope-flow i { width: 44px; height: 1px; background: #9db2d1; position: relative; }
+    .scope-flow i::after { content: ""; position: absolute; right: -1px; top: -3px; border-left: 6px solid #9db2d1; border-top: 3px solid transparent; border-bottom: 3px solid transparent; }
+    .runtime-baseline { margin-top: 8px; padding: 11px 18px; display: flex; align-items: center; gap: 24px; background: var(--surface); border: 1px solid var(--line); }
+    .runtime-baseline > b { flex: 1; font-size: 12px; }
+    .runtime-metric { padding-left: 17px; border-left: 1px solid var(--line); white-space: nowrap; }
+    .runtime-metric strong { margin-right: 5px; color: var(--blue); font-size: 16px; }
+    .runtime-metric span { color: var(--muted); font-size: 10px; }
+    .runtime-sample { color: var(--muted); font-size: 9px; white-space: nowrap; }
+
+    .section { margin-top: 23px; }
+    .section-heading { display: flex; justify-content: space-between; align-items: end; gap: 24px; margin-bottom: 10px; }
+    h2 { margin: 0; font-size: 19px; }
+    .section-heading p { max-width: 620px; margin: 0; color: var(--muted); font-size: 11px; text-align: right; }
+
+    .coverage-overview { display: grid; grid-template-columns: 240px 1fr; gap: 18px; padding: 20px; background: var(--surface); border: 1px solid var(--line); }
+    .coverage-number { padding-right: 18px; border-right: 1px solid var(--line); }
+    .coverage-number strong { display: block; color: var(--teal); font-size: 32px; line-height: 1.1; }
+    .coverage-number b { display: block; margin: 6px 0 4px; font-size: 14px; }
+    .coverage-number p { margin: 0; color: var(--muted); font-size: 11px; }
+    .coverage-graphic { align-self: center; }
+    .stacked-bar { height: 28px; display: flex; overflow: hidden; border-radius: 4px; }
+    .stacked-bar span { display: flex; align-items: center; justify-content: center; color: white; font-family: var(--mono); font-size: 10px; font-weight: 700; }
+    .covered-bar { width: 56.67%; background: var(--teal); }
+    .missing-bar { width: 26.66%; background: var(--amber); }
+    .human-bar { width: 16.67%; background: var(--violet); }
+    .legend { display: grid; grid-template-columns: 17fr 8fr 5fr; gap: 8px; margin-top: 9px; }
+    .legend div { min-width: 0; color: var(--muted); font-size: 10px; }
+    .legend b { display: block; color: var(--ink); font-size: 11px; }
+    .legend i { display: inline-block; width: 7px; height: 7px; margin-right: 5px; border-radius: 50%; }
+    .legend .covered-dot { background: var(--teal); }
+    .legend .missing-dot { background: var(--amber); }
+    .legend .human-dot { background: var(--violet); }
+
+    .matrix { overflow: hidden; background: var(--surface); border: 1px solid var(--line); }
+    .matrix-row { display: grid; grid-template-columns: 172px 1.8fr 1.15fr 1fr; border-bottom: 1px solid var(--line); }
+    .matrix-row:last-child { border-bottom: 0; }
+    .matrix-cell { min-width: 0; padding: 14px 15px; border-right: 1px solid var(--line); }
+    .matrix-cell:last-child { border-right: 0; }
+    .matrix-head .matrix-cell { min-height: 54px; display: flex; flex-direction: column; justify-content: center; background: #eef2f7; }
+    .matrix-head b { font-size: 12px; }
+    .matrix-head span { color: var(--muted); font-size: 9px; }
+    .domain { background: #fafbfd; }
+    .domain-index { color: var(--blue); font-family: var(--mono); font-size: 9px; }
+    .domain h3 { margin: 6px 0 4px; font-size: 15px; }
+    .domain p { margin: 0; color: var(--muted); font-size: 10px; }
+    .scene-list { display: flex; flex-wrap: wrap; gap: 6px; align-content: flex-start; }
+    .scene { padding: 4px 7px; border-radius: 3px; font-size: 10px; line-height: 1.35; }
+    .scene.covered { color: #12655e; background: var(--teal-soft); border: 1px solid #cce5e1; }
+    .scene.missing { color: #89500f; background: var(--amber-soft); border: 1px solid #f0d8ad; }
+    .scene.human { color: #554a7e; background: var(--violet-soft); border: 1px solid #dcd6eb; }
+
+    .readout { margin-top: 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .readout-card { padding: 13px 15px; background: var(--surface); border: 1px solid var(--line); }
+    .readout-card b { display: block; margin-bottom: 3px; font-size: 12px; }
+    .readout-card p { margin: 0; color: var(--muted); font-size: 10px; }
+    .readout-card.build { border-left: 3px solid var(--amber); }
+    .readout-card.people { border-left: 3px solid var(--violet); }
+
+    .appendix { margin-top: 24px; background: var(--surface); border: 1px solid var(--line); }
+    .appendix > summary { min-height: 50px; padding: 13px 17px; cursor: pointer; font-weight: 650; list-style-position: inside; }
+    .appendix > summary span { margin-left: 7px; color: var(--muted); font-size: 10px; font-weight: 400; }
+    .appendix[open] > summary { border-bottom: 1px solid var(--line); }
+    .appendix-content { padding: 16px; }
+    .appendix-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .check-group { padding: 14px; background: var(--page); border: 1px solid var(--line); }
+    .check-group h3 { margin: 0 0 8px; font-size: 13px; }
+    .check-group ol { margin: 0; padding-left: 21px; color: #465268; }
+    .check-group li { padding: 2px 0; font-size: 11px; }
+    .check-group code { color: var(--muted); font-family: var(--mono); font-size: 8px; }
+    .method { margin: 12px 0 0; color: var(--muted); font-size: 10px; }
+    footer { padding: 20px 0 36px; display: flex; justify-content: space-between; gap: 20px; color: var(--muted); font-size: 9px; }
+
+    @media (max-width: 850px) {
+      .summary { grid-template-columns: 1fr; }
+      .summary-facts { justify-content: flex-start; }
+      .coverage-overview { grid-template-columns: 1fr; }
+      .coverage-number { padding: 0 0 14px; border-right: 0; border-bottom: 1px solid var(--line); }
+      .matrix { overflow-x: auto; }
+      .matrix-row { min-width: 840px; }
+    }
+    @media (max-width: 620px) {
+      .shell { width: min(100% - 24px, 1180px); }
+      header { height: 56px; }
+      .meta { text-align: right; }
+      main { padding-top: 16px; }
+      .summary { padding: 18px; gap: 16px; }
+      h1 { font-size: 21px; }
+      .summary-facts { display: grid; grid-template-columns: repeat(3, 1fr); }
+      .fact { min-width: 0; padding-inline: 7px; }
+      .scope { grid-template-columns: 1fr; gap: 8px; }
+      .scope-flow { justify-content: flex-start; gap: 8px; font-size: 12px; }
+      .scope-flow i { width: 18px; }
+      .runtime-baseline { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 0; }
+      .runtime-baseline > b, .runtime-sample { grid-column: 1 / -1; }
+      .runtime-metric { padding-left: 0; border-left: 0; }
+      .section-heading { align-items: flex-start; flex-direction: column; gap: 3px; }
+      .section-heading p { text-align: left; }
+      .coverage-overview { padding: 15px; }
+      .stacked-bar span { font-size: 8px; }
+      .legend { grid-template-columns: 1fr; }
+      .matrix { overflow: visible; background: transparent; border: 0; }
+      .matrix-head { display: none; }
+      .matrix-row { min-width: 0; grid-template-columns: 1fr; margin-bottom: 10px; background: var(--surface); border: 1px solid var(--line); }
+      .matrix-row:last-child { border-bottom: 1px solid var(--line); }
+      .matrix-cell { border-right: 0; border-bottom: 1px solid var(--line); }
+      .matrix-cell:last-child { border-bottom: 0; }
+      .matrix-cell.scene-list::before { flex-basis: 100%; margin-bottom: 2px; font-size: 10px; font-weight: 650; }
+      .matrix-cell:nth-child(2)::before { content: "已自动覆盖"; color: var(--teal); }
+      .matrix-cell:nth-child(3)::before { content: "应检查但尚未建设"; color: var(--amber); }
+      .matrix-cell:nth-child(4)::before { content: "当前需要人工"; color: var(--violet); }
+      .readout { grid-template-columns: 1fr; }
+      .appendix-grid { grid-template-columns: 1fr; }
+      footer { flex-direction: column; }
+    }
+    @media print {
+      body { background: white; }
+      .appendix { display: none; }
+      main { padding-top: 12px; }
+      .section { break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <header class="shell">
+    <div class="brand"><span class="brand-mark" aria-hidden="true"></span>MetaPQP 产品检查能力地图</div>
+    <div class="meta">购买前体验 · 2026.09</div>
+  </header>
+
+  <main class="shell">
+    <section class="summary" aria-labelledby="page-title">
+      <div>
+        <p class="summary-label">核心结论</p>
+        <h1 id="page-title">购买前体验共盘点 30 类典型场景，<span>当前可自动覆盖约 57%。</span></h1>
+      </div>
+      <div class="summary-facts" aria-label="覆盖概览">
+        <div class="fact"><strong>17</strong><small>已自动覆盖</small></div>
+        <div class="fact"><strong>8</strong><small>尚未建设</small></div>
+        <div class="fact"><strong>5</strong><small>需要人工</small></div>
+      </div>
+    </section>
+
+    <div class="scope" aria-label="本地图覆盖范围">
+      <b>本次能力范围</b>
+      <div class="scope-flow"><span>了解产品</span><i aria-hidden="true"></i><span>比较方案</span><i aria-hidden="true"></i><span>配置购买</span></div>
+    </div>
+    <div class="runtime-baseline" aria-label="页面检查平均运行成本">
+      <b>运行成本基线</b>
+      <div class="runtime-metric"><strong>7.9 分钟</strong><span>平均每页检查耗时</span></div>
+      <div class="runtime-metric"><strong>7.4 万</strong><span>平均每页总 Token</span></div>
+      <div class="runtime-sample">样本：2026-09-22 核心页面批次中 18 个完整运行页面</div>
+    </div>
+
+    <section class="section" aria-labelledby="overview-title">
+      <div class="section-heading">
+        <h2 id="overview-title">场景覆盖构成</h2>
+        <p>按场景族统计能力广度；不是测试通过率，也不是页面或 URL 的执行覆盖率。</p>
+      </div>
+      <div class="coverage-overview">
+        <div class="coverage-number"><strong>17 / 30</strong><b>当前可自动检查</b><p>由代码或模型基于页面与旅程证据给出结论。</p></div>
+        <div class="coverage-graphic">
+          <div class="stacked-bar" aria-label="已覆盖 57%，尚未建设 27%，需要人工 16%"><span class="covered-bar">57%</span><span class="missing-bar">27%</span><span class="human-bar">16%</span></div>
+          <div class="legend">
+            <div><b><i class="covered-dot"></i>已自动覆盖 · 17 类</b>现有 deterministic + skill</div>
+            <div><b><i class="missing-dot"></i>尚未建设 · 8 类</b>原则上可以继续自动化</div>
+            <div><b><i class="human-dot"></i>需要人工 · 5 类</b>当前不宜自动下结论</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="matrix-title">
+      <div class="section-heading">
+        <h2 id="matrix-title">具体覆盖了什么、还缺什么</h2>
+        <p>横向看每个能力包：绿色是已实现，橙色是应该补，紫色是需要产品、设计或真实用户判断。</p>
+      </div>
+      <div class="matrix" role="table" aria-label="购买前体验能力覆盖矩阵">
+        <div class="matrix-row matrix-head" role="row">
+          <div class="matrix-cell" role="columnheader"><b>能力包</b><span>5 类 / 42 个检查项</span></div>
+          <div class="matrix-cell" role="columnheader"><b>已自动覆盖 · 17</b><span>代码或模型已有稳定检查入口</span></div>
+          <div class="matrix-cell" role="columnheader"><b>应检查但尚未建设 · 8</b><span>适合继续产品化、自动化</span></div>
+          <div class="matrix-cell" role="columnheader"><b>当前需要人工 · 5</b><span>不能只依赖代码与模型</span></div>
+        </div>
+        <div class="matrix-row" role="row">
+          <div class="matrix-cell domain" role="rowheader"><span class="domain-index">01 · 5 个现有检查项</span><h3>打得开</h3><p>基础可用与稳定</p></div>
+          <div class="matrix-cell scene-list"><span class="scene covered">页面与主体正常加载</span><span class="scene covered">运行错误影响识别</span><span class="scene covered">链接与图片资源有效</span></div>
+          <div class="matrix-cell scene-list"><span class="scene missing">性能与弱网体验</span><span class="scene missing">浏览器与分辨率兼容</span></div>
+          <div class="matrix-cell scene-list"><span class="scene human">等待与卡顿是否可接受</span></div>
+        </div>
+        <div class="matrix-row" role="row">
+          <div class="matrix-cell domain" role="rowheader"><span class="domain-index">02 · 14 个现有检查项</span><h3>看得懂、选得对</h3><p>内容、决策与商业信息</p></div>
+          <div class="matrix-cell scene-list"><span class="scene covered">价值与目标用户表达</span><span class="scene covered">文案与术语理解</span><span class="scene covered">方案、价格与风险披露</span><span class="scene covered">成果、试用与决策信息</span></div>
+          <div class="matrix-cell scene-list"><span class="scene missing">事实准确性与内容时效</span></div>
+          <div class="matrix-cell scene-list"><span class="scene human">是否真正打动目标用户</span></div>
+        </div>
+        <div class="matrix-row" role="row">
+          <div class="matrix-cell domain" role="rowheader"><span class="domain-index">03 · 8 个现有检查项</span><h3>点得动、走得通</h3><p>操作、反馈与选择</p></div>
+          <div class="matrix-cell scene-list"><span class="scene covered">入口与目标可达</span><span class="scene covered">登录恢复与错误指引</span><span class="scene covered">选择、价格与摘要同步</span></div>
+          <div class="matrix-cell scene-list"><span class="scene missing">复杂表单与异常输入</span><span class="scene missing">搜索、上传与异步任务</span></div>
+          <div class="matrix-cell scene-list"><span class="scene human">任务是否容易学会</span></div>
+        </div>
+        <div class="matrix-row" role="row">
+          <div class="matrix-cell domain" role="rowheader"><span class="domain-index">04 · 9 个现有检查项</span><h3>前后不走样</h3><p>跨页面与跨阶段连续</p></div>
+          <div class="matrix-cell scene-list"><span class="scene covered">产品与权益一致</span><span class="scene covered">价格与承诺一致</span><span class="scene covered">选择与状态连续</span><span class="scene covered">术语与动作预期连续</span></div>
+          <div class="matrix-cell scene-list"><span class="scene missing">刷新、返回与中断恢复</span></div>
+          <div class="matrix-cell scene-list"><span class="scene human">业务规则本身是否合理</span></div>
+        </div>
+        <div class="matrix-row" role="row">
+          <div class="matrix-cell domain" role="rowheader"><span class="domain-index">05 · 6 个现有检查项</span><h3>移动端可用</h3><p>布局、内容与触控</p></div>
+          <div class="matrix-cell scene-list"><span class="scene covered">响应式布局与溢出</span><span class="scene covered">裁切、遮挡与图片</span><span class="scene covered">触控尺寸与基础可访问名</span></div>
+          <div class="matrix-cell scene-list"><span class="scene missing">对比度、焦点与语义无障碍</span><span class="scene missing">桌面端视觉与跨设备一致</span></div>
+          <div class="matrix-cell scene-list"><span class="scene human">视觉层级与品牌感受</span></div>
+        </div>
+      </div>
+      <div class="readout">
+        <div class="readout-card build"><b>最值得继续自动化</b><p>复杂交互、性能弱网、深度无障碍和中断恢复，共占当前缺口的主要部分。</p></div>
+        <div class="readout-card people"><b>应保留人工检查</b><p>用户是否被打动、是否容易学会、规则是否合理，以及整体视觉感受，需要用户研究或专业评审。</p></div>
+      </div>
+    </section>
+
+    <details class="appendix">
+      <summary>查看现有 42 项检查明细 <span>默认收起，用于追溯“已自动覆盖”的能力来源</span></summary>
+      <div class="appendix-content">
+        <div class="appendix-grid">
+          <section class="check-group"><h3>打得开 · 5 项</h3><ol>
+            <li>页面应正常加载 <code>page-load</code></li><li>页面不应出现影响核心功能的运行错误 <code>runtime-errors</code></li><li>页面可见链接不应确认失效 <code>broken-links</code></li><li>可见产品图像不应加载失败 <code>visible-image-load-failure</code></li><li>页面应具有描述主题的 Title <code>document-structure</code></li>
+          </ol></section>
+          <section class="check-group"><h3>看得懂、选得对 · 14 项</h3><ol>
+            <li>页面文案不应包含明确错别字或语病 <code>copy-quality</code></li><li>专业术语和计费名词应清晰可理解 <code>terminology-clarity</code></li><li>页面内部产品规则和承诺应保持一致 <code>content-internal-consistency</code></li><li>浏览器页面标题应与当前页面主题一致 <code>page-title-identity-consistency</code></li><li>产品价值应清晰可理解 <code>product-value-clarity</code></li><li>CTA 应明确表达动作和结果 <code>cta-clarity</code></li><li>最终成果是否在决策前可见 <code>reference-outcome-visibility</code></li><li>核心价值是否可先体验 <code>reference-zero-cost-access</code></li><li>方案选择是否清晰 <code>reference-option-discernibility</code></li><li>关键决策信息是否在选择前说清 <code>reference-decision-information-proximity</code></li><li>价格、周期和资源量应能被独立核对 <code>pricing-transparency</code></li><li>配置费用应符合明示计价规则 <code>price-calculation-consistency</code></li><li>购买页应清楚披露订阅与退订风险 <code>commitment-risk-timing</code></li><li>承诺与限制是否提前说明 <code>reference-commitment-boundary</code></li>
+          </ol></section>
+          <section class="check-group"><h3>点得动、走得通 · 8 项</h3><ol>
+            <li>点击后应到达可用目标 <code>journey-transition-reachability</code></li><li>登录后应恢复到预期业务入口 <code>entry-and-resume-continuity</code></li><li>跳转前后产品上下文应保持连续 <code>transaction-context-continuity</code></li><li>点击后应提供可观察的反馈 <code>interaction-feedback-visibility</code></li><li>错误页是否提供恢复指引 <code>interaction-failure-guidance</code></li><li>点击结果应符合用户预期 <code>transition-intent-result-consistency</code></li><li>购买配置选择应与订单摘要同步 <code>purchase-selection-state-consistency</code></li><li>用户选择是否连续保留 <code>reference-state-continuity</code></li>
+          </ol></section>
+          <section class="check-group"><h3>前后不走样 · 9 项</h3><ol>
+            <li>跨阶段产品身份与定位一致性</li><li>跨阶段决策引导连续性</li><li>跨阶段商业条件一致性</li><li>跨阶段可选内容、规格与权益一致性</li><li>跨阶段操作预期与落地内容连续性</li><li>跨阶段术语与概念连续性</li><li>跨阶段默认项与用户选择状态连续性</li><li>跨阶段产品或资源状态一致性</li><li>跨阶段持续承诺、变更与退出规则一致性</li>
+          </ol></section>
+          <section class="check-group"><h3>移动端可用 · 6 项</h3><ol>
+            <li>可点击图片控件应具有可访问名称 <code>image-alt</code></li><li>移动端页面不应出现意外横向溢出 <code>mobile-horizontal-overflow</code></li><li>移动端关键控件应具备足够触控区域 <code>mobile-tap-target-size</code></li><li>移动端页面不应出现明显响应式破版 <code>responsive-visual-integrity</code></li><li>移动端关键文本不应被异常裁切 <code>text-clipping-and-truncation</code></li><li>移动端关键内容不应被意外遮挡 <code>visible-content-occlusion</code></li>
+          </ol></section>
+        </div>
+        <p class="method">统计口径：30 类“场景族”是对购买前体验应检查问题的产品化归纳；42 项是当前工程中已登记的具体检查规则。两者不是同一粒度。</p>
+      </div>
+    </details>
+  </main>
+
+  <footer class="shell"><span>MetaPQP Capability Map</span><span>场景覆盖为产品盘点口径 · 2026-09</span></footer>
+</body>
+</html>

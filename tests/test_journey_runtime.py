@@ -1,4 +1,3 @@
-import base64
 import json
 from pathlib import Path
 
@@ -92,6 +91,27 @@ def test_page_map_resolver_ignores_console_locale_and_region():
 
     assert resolution.status == "matched"
     assert resolution.node_id == "tokenplan-purchase"
+
+
+@pytest.mark.parametrize(
+    ("sku", "expected_node"),
+    [
+        ("standard", "officeace-purchase-standard"),
+        ("premium", "officeace-purchase-premium"),
+    ],
+)
+def test_page_map_resolver_matches_officeace_sku_without_encoding_assumptions(
+    sku, expected_node
+):
+    _, page_maps, *_ = journey_assets()
+    resolution = PageMapNodeResolver(page_maps).resolve(
+        "https://console.huaweicloud.com/agentarts/?region=cn-southwest-2"
+        "#/shopping?product_list=%5B%7B%22skuCode%22:%22officeace.personal.package."
+        f"{sku}%22%7D%5D&type=OfficeAce"
+    )
+
+    assert resolution.status == "matched"
+    assert resolution.node_id == expected_node
 
 
 def test_page_plan_skips_transition_check_specs():
@@ -339,6 +359,15 @@ class SparseConflictModel:
         )
 
 
+class FailingJourneyModel:
+    enabled = True
+    model = "test-model"
+
+    async def complete_json(self, request):
+        del request
+        raise RuntimeError("provider rejected the JSON schema")
+
+
 def test_journey_plan_reuses_one_spec_across_adjacent_node_pairs():
     specs, _, _, journeys, _ = journey_assets()
     journey = journeys.get("tokenplan-awareness-purchase-preview")
@@ -445,6 +474,36 @@ async def test_journey_executor_downgrades_conflict_without_two_sided_evidence()
     assert len(calls) == 1
 
 
+async def test_journey_executor_uses_strict_schema_and_persists_model_failure():
+    specs, _, _, journeys, _ = journey_assets()
+    journey = journeys.get("tokenplan-awareness-purchase-preview")
+    evidence = JourneyEvidenceBuilder().build(
+        journey,
+        [_page_result("stage-a", "感知"), _page_result("stage-b", "购买")],
+    )
+    plan = JourneyCheckPlanBuilder(specs, ROOT / "config/audit_profiles").build(
+        journey,
+        evidence,
+    )
+    executor = JourneyCheckExecutor(
+        specs,
+        FailingJourneyModel(),
+        SkillLoader(ROOT / "skills"),
+    )
+
+    request = executor._request(plan, evidence)
+    item_schema = request.schema["properties"]["results"]["items"]
+    assert request.schema["additionalProperties"] is False
+    assert item_schema["additionalProperties"] is False
+
+    runs, calls = await executor.execute(plan, evidence)
+
+    assert all(item.status == CheckStatus.ERROR for item in runs)
+    assert calls[0].error_type == "RuntimeError"
+    assert calls[0].error_detail == "provider rejected the JSON schema"
+    assert "RuntimeError" in runs[0].reason
+
+
 def test_journey_writer_only_creates_annotated_screenshot_for_failure(tmp_path):
     source = tmp_path / "source.png"
     Image.new("RGB", (1000, 1200), "white").save(source)
@@ -512,9 +571,9 @@ def test_journey_writer_only_creates_annotated_screenshot_for_failure(tmp_path):
         for item in screenshots
     )
     assert screenshots[0]["locations"][0]["text"] == "最受欢迎"
-    assert screenshots[1]["locations"][0]["element_ref"] == "standard-action"
+    assert screenshots[1]["locations"] == []
     assert screenshots[0]["precision"] == "element"
-    assert screenshots[1]["precision"] == "comparison"
+    assert screenshots[1]["precision"] == "context"
 
     passed = failed.model_copy(update={"status": CheckStatus.PASS})
     assert writer._write_issue_screenshots(
@@ -547,10 +606,9 @@ def test_journey_writer_embeds_page_reports_and_evidence_for_portable_html(tmp_p
 
     embedded = JourneyOutputWriter(tmp_path)._standalone_payload(payload, run_dir)
 
-    page_report = embedded["pages"][0]["embedded_report"]
-    decoded_report = base64.b64decode(page_report.split(",", 1)[1]).decode("utf-8")
-    assert "data:image/svg+xml;base64," in decoded_report
-    assert "screenshots/page.svg" not in decoded_report
+    page_report = embedded["pages"][0]["embedded_report_html"]
+    assert "data:image/svg+xml;base64," in page_report
+    assert "screenshots/page.svg" not in page_report
     assert embedded["journey_check_runs"][0]["evidence_screenshots"][0]["data_uri"].startswith(
         "data:image/png;base64,"
     )
@@ -680,7 +738,9 @@ async def test_supervised_single_transition_journey_runs_to_safe_stop(tmp_path):
     assert result.status == "completed"
     assert result.termination_reason == "safe_stop_reached"
     assert len(result.page_results) == 2
-    assert [item.status for item in result.transition_check_runs] == ["pass", "pass", "pass"]
+    assert [item.status.value for item in result.transition_check_runs] == [
+        "pass", "pass", "pass", "pass", "pass"
+    ]
     assert len(result.journey_check_runs) == 9
     assert {item.status for item in result.journey_check_runs} == {"error"}
 

@@ -30,3 +30,18 @@ def test_target_does_not_rewrite_non_console_url():
 
     assert target.url == request.url
     assert target.page_surface == "portal"
+
+
+def test_missing_page_id_uses_readable_purchase_identity_from_console_url():
+    request = PageAuditRequest(
+        url=(
+            "https://console.huaweicloud.com/agentarts/?region=cn-southwest-2"
+            "#/shopping?product_list=%5B%7B%22skuCode%22%3A"
+            "%22officeace.personal.package.standard%22%7D%5D"
+        ),
+        locale="en-US",
+    )
+
+    target = PageAuditPipeline.target_for(request)
+
+    assert target.page_id == "officeace-purchase"
