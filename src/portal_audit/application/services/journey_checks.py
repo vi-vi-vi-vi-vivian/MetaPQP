@@ -10,6 +10,7 @@ from typing import Any
 import yaml
 
 from portal_audit.application.ports.model import ModelPort, ModelRequest, TextContent
+from portal_audit.application.services.model_prompt_trace import model_request_trace
 from portal_audit.application.services.progress import ProgressReporter
 from portal_audit.domain.models import (
     AuditResult,
@@ -281,8 +282,24 @@ class JourneyCheckExecutor:
                 "跨阶段语义检查暂时不可用，本批检查将标记为未执行",
                 (f"原因：{type(error).__name__}",),
             )
-            reason = "跨阶段语义模型暂不可用，本项未执行"
-            return [self._error_run(item, reason) for item in plan.invocations], []
+            detail = self._safe_error_detail(error)
+            reason = f"跨阶段语义模型调用失败（{type(error).__name__}）：{detail}"
+            return (
+                [self._error_run(item, reason) for item in plan.invocations],
+                [
+                    ModelCallRecord(
+                        batch_id="journey-semantic-consistency",
+                        check_spec_ids=list(
+                            dict.fromkeys(item.check_spec_id for item in plan.invocations)
+                        ),
+                        provider=type(self.model).__name__,
+                        model=str(getattr(self.model, "model", "unknown")),
+                        error_type=type(error).__name__,
+                        error_detail=detail,
+                        prompt_trace=model_request_trace(request),
+                    )
+                ],
+            )
         call = ModelCallRecord(
             batch_id="journey-semantic-consistency",
             check_spec_ids=list(dict.fromkeys(item.check_spec_id for item in plan.invocations)),
@@ -294,6 +311,7 @@ class JourneyCheckExecutor:
             total_tokens=completion.total_tokens,
             latency_ms=completion.latency_ms,
             usage_details=dict(completion.usage_details),
+            prompt_trace=model_request_trace(request),
         )
         by_id = {
             str(item.get("invocation_id") or ""): item
@@ -345,15 +363,27 @@ class JourneyCheckExecutor:
                             "confidence": {"type": "number"},
                         },
                         "required": ["invocation_id", "status", "reason", "evidence", "suggestion", "confidence"],
+                        "additionalProperties": False,
                     },
                 }
             },
             "required": ["results"],
+            "additionalProperties": False,
         }
         return ModelRequest(
             system=system,
             content=[TextContent(json.dumps(payload, ensure_ascii=False))],
             schema=schema,
+        )
+
+    @staticmethod
+    def _safe_error_detail(error: Exception) -> str:
+        """Keep actionable provider diagnostics without persisting credentials."""
+        detail = str(error)
+        return re.sub(
+            r"(?i)(api[_-]?key|authorization|bearer)\s*([=:])\s*[^,\s]+",
+            r"\1\2[REDACTED]",
+            detail,
         )
 
     def _result_run(self, invocation: CheckInvocation, raw: dict[str, Any] | None) -> CheckRun:

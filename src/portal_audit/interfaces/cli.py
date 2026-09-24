@@ -23,6 +23,7 @@ from portal_audit.bootstrap import (
 )
 from portal_audit.domain.models import (
     AuthMode,
+    ComparisonExecutionStrategy,
     ComparisonRequest,
     JourneyAuditRequest,
     ModelExecutionMode,
@@ -32,6 +33,7 @@ from portal_audit.domain.models import (
 )
 from portal_audit.domain.registry import (
     CapabilityRegistry,
+    ChecklistRegistry,
     CheckSpecRegistry,
     ComparisonProfileRegistry,
     JourneyExecutorRegistry,
@@ -77,6 +79,11 @@ def build_parser() -> argparse.ArgumentParser:
     page.add_argument("--archetype")
     page.add_argument("--auth", choices=[item.value for item in AuthMode], default="auto")
     page.add_argument(
+        "--headed",
+        action="store_true",
+        help="run the isolated browser visibly; useful for Console compatibility diagnosis",
+    )
+    page.add_argument(
         "--model-execution",
         choices=[item.value for item in ModelExecutionMode],
         default=ModelExecutionMode.GROUPED.value,
@@ -111,12 +118,20 @@ def build_parser() -> argparse.ArgumentParser:
     compare.add_argument("--device", choices=["desktop"], default="desktop")
     compare.add_argument("--locale", choices=DEFAULT_LOCALES, default="zh-CN")
     compare.add_argument("--audit-profile", default="comparison-mvp")
+    compare.add_argument(
+        "--execution-strategy",
+        choices=[item.value for item in ComparisonExecutionStrategy],
+        help="override the ComparisonProfile execution strategy for this run",
+    )
+    ui = subparsers.add_parser("ui", help="start the local configuration and run console")
+    ui.add_argument("--host", default="127.0.0.1")
+    ui.add_argument("--port", type=int, default=8765)
     subparsers.add_parser("validate-config", help="validate all declarative registries")
     return parser
 
 
 async def _run_page(args: argparse.Namespace) -> int:
-    runner = build_page_audit_runner()
+    runner = build_page_audit_runner(headless=not args.headed)
     results = []
     page_surface = resolve_page_surface(args.url, args.page_surface)
     for device, locale in requested_variants(
@@ -239,7 +254,8 @@ async def _run_comparison(args: argparse.Namespace) -> int:
         ComparisonRequest(comparison_profile_id=args.comparison_profile,
                           subject=target("subject", args.subject_url, args.subject_product),
                           references=[target(f"reference-{index + 1}", url, names[index] if names else None) for index, url in enumerate(args.reference_url)],
-                          device=args.device, locale=args.locale, audit_profile=args.audit_profile)
+                          device=args.device, locale=args.locale, audit_profile=args.audit_profile,
+                          execution_strategy=args.execution_strategy)
     )
     print(json.dumps({"scope": "comparison", "job_id": result.job_id, "output_dir": result.output_dir,
                       "opportunity_count": sum(item.status.value == "fail" for item in result.assessment.check_runs)}, ensure_ascii=False))
@@ -262,6 +278,7 @@ def _validate_config() -> int:
     SafetyProfileRegistry(settings.config_root / "safety_profiles").load()
     JourneyExecutorRegistry(settings.config_root / "journey_executors").load()
     ComparisonProfileRegistry(settings.config_root / "comparison_profiles").load()
+    ChecklistRegistry(settings.config_root / "checklists").load()
     print("Configuration is valid.")
     return 0
 
@@ -277,6 +294,13 @@ def main() -> int:
             return asyncio.run(_run_audit(args))
         if args.command == "compare":
             return asyncio.run(_run_comparison(args))
+        if args.command == "ui":
+            import uvicorn
+
+            from portal_audit.interfaces.web.app import create_app
+
+            uvicorn.run(create_app(), host=args.host, port=args.port)
+            return 0
         if args.command == "validate-config":
             return _validate_config()
         return 2

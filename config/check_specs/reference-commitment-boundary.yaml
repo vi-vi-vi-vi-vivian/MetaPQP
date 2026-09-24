@@ -1,7 +1,7 @@
 id: reference-commitment-boundary
-version: 1.0.0
+version: 1.1.0
 title: 承诺与限制是否提前说明
-description: 检查能力限制、前置条件、计费或风险边界是否可借鉴参考页面在用户操作前清楚告知的做法。
+description: 仅在页面已包含最终提交、订阅、扣费或其他不可逆承诺操作时检查。参考页面必须在相同承诺节点前可定位地说明实际适用的限制、前置条件、计费或退出边界；主体在该节点前不可见时才可判为缺口。产品介绍页、未到提交步骤的页面或无法确认操作后果的证据必须待确认，不得把信息缺失直接当作问题。
 scope: comparison
 tags: [comparison, commitment]
 applies_when: {dimensions: [commitment_boundary], page_roles: [awareness, purchase]}

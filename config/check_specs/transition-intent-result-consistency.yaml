@@ -1,0 +1,13 @@
+id: transition-intent-result-consistency
+version: 1.0.0
+title: 点击结果应符合用户预期
+description: 点击前的控件文案与周边承诺，应与点击后的页面或反馈语义一致。
+scope: transition
+tags: [interaction, transition, semantic]
+applies_when: {}
+required_evidence: [interaction_candidate, before_snapshot, after_snapshot, interaction_trace]
+executor: {type: model_skill, capability_id: transition-intent-result-consistency-skill}
+default_severity: p1
+standard_refs:
+  - criterion_id: nielsen-heuristics/H2
+    relation: supports

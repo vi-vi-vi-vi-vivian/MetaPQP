@@ -21,6 +21,7 @@ class ComparisonOutputWriter:
         root = self.output_root / "comparisons" / result.comparison_profile.id / result.job_id
         root.mkdir(parents=True, exist_ok=True)
         payload = result.model_dump(mode="json")
+        self._localize_display_content(payload, result)
         crops = self._crops(result)
         payload["comparison_crops"] = crops
         (root / "comparison.json").write_text(
@@ -28,6 +29,34 @@ class ComparisonOutputWriter:
         )
         (root / "report.html").write_text(self._html(payload), encoding="utf-8")
         return root
+
+    @staticmethod
+    def _localize_display_content(payload: dict, result: ComparisonResult) -> None:
+        """Make every displayed quotation exactly match its annotated elements.
+
+        This repeats the executor's guard at the presentation boundary so an
+        older saved result, or any future executor, cannot render a model-made
+        summary beside a screenshot of different text.
+        """
+        captures = {
+            item.target.page_id: item.snapshot
+            for item in [result.subject_capture, *result.reference_captures]
+        }
+        for detail in payload.get("assessment", {}).get("details", []):
+            for display in [detail.get("subject_display", {}), *detail.get("reference_displays", [])]:
+                snapshot = captures.get(display.get("target_id"))
+                refs = display.get("element_refs", [])
+                if snapshot is None or not refs:
+                    continue
+                by_ref = {item.element_ref: item for item in snapshot.evidence_elements}
+                elements = [by_ref.get(ref) for ref in refs]
+                quotes = [str(item.text or item.href or "").strip() for item in elements if item]
+                if len(quotes) != len(refs) or not all(quotes):
+                    display["content"] = "未能从截图可定位元素还原展示内容"
+                    continue
+                display["content"] = "；".join(
+                    f"[{index}] {quote}" for index, quote in enumerate(quotes, start=1)
+                )
 
     def _crops(self, result: ComparisonResult) -> dict[str, dict[str, str | None]]:
         results = {
@@ -47,25 +76,67 @@ class ComparisonOutputWriter:
     def _crop(result, refs: list[str]) -> str | None:
         if result is None or not refs:
             return None
-        source = next(
-            (Path(item.path) for item in result.snapshot.artifacts if item.kind == "screenshot" and Path(item.path).is_file()),
-            None,
-        )
-        if source is None:
-            return None
         elements = {item.element_ref: item for item in result.snapshot.evidence_elements}
         boxes = [elements[ref].bounds for ref in refs if ref in elements and elements[ref].bounds]
-        if not boxes:
+        # A partial crop can imply that all cited evidence is visible, while a
+        # missing reference is actually the key claim. Prefer an explicit
+        # "not locatable" state to a convincing but incomplete annotation.
+        if not boxes or len(boxes) != len(refs):
+            return None
+        source = next(
+            (Path(item.path) for item in result.snapshot.artifacts
+             if item.kind == "screenshot" and Path(item.path).is_file()),
+            None,
+        )
+        document = result.snapshot.document_size or result.snapshot.viewport
+        local_top = 0.0
+        # Coordinates for Console content are collected against its nested
+        # scroller.  Use a screenshot captured at the same scroll position;
+        # drawing them onto the shell/full-page screenshot is misleading.
+        matching_segment = next(
+            (
+                item for item in result.snapshot.artifacts
+                if item.kind == "screenshot_segment"
+                and Path(item.path).is_file()
+                and all(
+                    float(item.metadata.get("top", 0))
+                    <= float(box["y"])
+                    < float(item.metadata.get("top", 0)) + float(item.metadata.get("height", 0))
+                    for box in boxes
+                )
+            ),
+            None,
+        )
+        if matching_segment is not None:
+            source = Path(matching_segment.path)
+            local_top = float(matching_segment.metadata.get("top", 0))
+            document = {
+                "width": matching_segment.metadata.get("width", result.snapshot.viewport["width"]),
+                "height": matching_segment.metadata.get("height", result.snapshot.viewport["height"]),
+            }
+        if source is None:
             return None
         with Image.open(source) as image:
             image = image.convert("RGB")
-            doc = result.snapshot.document_size or result.snapshot.viewport
-            scale_x = image.width / max(1, doc.get("width", result.snapshot.viewport["width"]))
-            scale_y = image.height / max(1, doc.get("height", image.height))
-            pixel_boxes = [
-                (box["x"] * scale_x, box["y"] * scale_y, (box["x"] + box["width"]) * scale_x, (box["y"] + box["height"]) * scale_y)
-                for box in boxes
-            ]
+            document_width = max(1, document.get("width", result.snapshot.viewport["width"]))
+            document_height = max(1, document.get("height", image.height))
+            scale_x = image.width / document_width
+            scale_y = image.height / document_height
+            pixel_boxes = []
+            for box in boxes:
+                # Evidence can include a visually hidden/off-canvas carousel slide.
+                # It has DOM coordinates but no matching pixels in a full-page screenshot.
+                # Clip partially visible elements and omit fully out-of-canvas ones rather
+                # than drawing a misleading rectangle at an image edge.
+                left = max(0.0, float(box["x"]))
+                top = max(0.0, float(box["y"]) - local_top)
+                right = min(float(document_width), float(box["x"]) + float(box["width"]))
+                bottom = min(float(document_height), float(box["y"]) - local_top + float(box["height"]))
+                if right <= left or bottom <= top:
+                    return None
+                pixel_boxes.append((left * scale_x, top * scale_y, right * scale_x, bottom * scale_y))
+            if not pixel_boxes:
+                return None
             padding = 72
             left = max(0, int(min(box[0] for box in pixel_boxes) - padding))
             top = max(0, int(min(box[1] for box in pixel_boxes) - padding))
@@ -73,8 +144,11 @@ class ComparisonOutputWriter:
             bottom = min(image.height, int(max(box[3] for box in pixel_boxes) + padding))
             canvas = image.copy()
             draw = ImageDraw.Draw(canvas)
-            for left_box, top_box, right_box, bottom_box in pixel_boxes:
+            for index, (left_box, top_box, right_box, bottom_box) in enumerate(pixel_boxes, start=1):
                 draw.rectangle((left_box, top_box, right_box, bottom_box), outline="#e5484d", width=5)
+                label_left, label_top = int(left_box), int(top_box)
+                draw.rectangle((label_left, label_top, label_left + 24, label_top + 24), fill="#e5484d")
+                draw.text((label_left + 8, label_top + 5), str(index), fill="white")
             crop = canvas.crop((left, top, right, bottom))
             stream = BytesIO()
             crop.save(stream, format="PNG", optimize=True)
@@ -113,8 +187,8 @@ class ComparisonOutputWriter:
         count = sum(item["status"] == "fail" for item in runs)
         coverage = self._coverage_html(profile, runs, esc)
         return f'''<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{esc(profile["title"])} · 对比检查</title><style>
-*{{box-sizing:border-box}}body{{margin:0;background:#f5f7fb;color:#182033;font:15px -apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif}}aside{{position:fixed;width:264px;height:100vh;background:#12233f;color:#dfe9f9;padding:32px 24px;overflow:auto}}aside h1{{font-size:18px;color:white;margin:0 0 9px}}aside p{{font-size:13px;line-height:1.5;color:#a9c1e2}}aside a{{display:block;color:#d8e6fa;text-decoration:none;padding:8px 0;border-bottom:1px solid #294361;font-size:13px}}aside .nav-label{{margin:22px 0 6px;color:#83a3cc;font-size:11px;font-weight:700;letter-spacing:.08em}}main{{margin-left:264px;max-width:1320px;padding:42px 54px 80px}}.hero{{background:linear-gradient(120deg,#183b70,#2367a7);color:#fff;border-radius:18px;padding:28px 32px;margin-bottom:28px}}.hero h1{{margin:0 0 10px;font-size:28px}}.metric{{font-size:32px;font-weight:700}}.metric small{{font-size:15px;font-weight:400}}.coverage{{background:#fff;border:1px solid #dce4f0;border-radius:14px;padding:24px 28px;margin:18px 0 28px;box-shadow:0 4px 14px #1525420c}}.section-kicker{{font-size:12px;color:#5d7190;font-weight:700;letter-spacing:.08em;margin:0 0 5px}}.coverage h2{{margin:0 0 8px}}.coverage-grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:14px;margin-top:18px}}.coverage-group{{border:1px solid #dfe6ef;border-radius:10px;padding:16px;background:#f9fbfe}}.coverage-group h3{{margin:0 0 6px;font-size:17px}}.coverage-group>p{{margin:0 0 12px;color:#5b6b81;font-size:13px}}.coverage-item{{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 0;border-top:1px solid #e7edf5}}.coverage-item span:first-child{{line-height:1.4}}.status{{white-space:nowrap;border-radius:12px;padding:3px 7px;font-size:12px;font-weight:600;background:#eef2f6;color:#56677e}}.status.fail{{background:#fff0e9;color:#b74619}}.status.pass{{background:#e7f5ed;color:#197047}}.not-covered{{margin-top:18px;padding:13px 16px;background:#f7f9fc;border-radius:9px;color:#52637a}}.not-covered b{{color:#33445d}}.detail-title{{margin:34px 0 12px;font-size:22px}}.detail-title p{{font-size:14px;color:#5b6b81;margin:4px 0}}.card{{background:#fff;border:1px solid #dce4f0;border-radius:14px;padding:24px 28px;margin:18px 0;box-shadow:0 4px 14px #1525420c}}.issue{{border-left:5px solid #dc6b37}}.pass{{border-left:5px solid #48a178}}.neutral{{border-left:5px solid #8291a7}}.cardtop{{display:flex;justify-content:space-between;color:#65758d;font-size:12px}}.pill{{border-radius:20px;padding:4px 9px;background:#e7f5ed;color:#197047;font-weight:600}}.neutral .pill{{background:#eef2f6;color:#56677e}}.issue .pill{{background:#fff0e9;color:#b74619}}h2{{font-size:19px;margin:14px 0}}p{{line-height:1.7;margin:7px 0}}.field{{padding:14px 16px;margin:13px 0;border-radius:9px;background:#f7f9fc;border:1px solid #e1e8f1}}.field>b{{display:block;color:#485971}}.evidence-grid,.shots{{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}}.evidence-grid .field{{margin:0}}.field article{{padding-top:6px;border-top:1px solid #dce5ee}}.field article:first-of-type{{border-top:0}}.suggestion{{background:#fff7f2;border-color:#f4d5c5}}.shots{{margin-top:20px}}figure{{margin:0;border:1px solid #dfe6ef;border-radius:10px;padding:10px;background:#f9fbfe}}figcaption{{font-weight:600;margin:0 0 8px}}img{{display:block;width:100%;max-height:520px;object-fit:contain;object-position:top;background:#fff}}.missing{{min-height:160px;padding:58px 16px;text-align:center;color:#7e8da3;background:#f0f3f8}}@media(max-width:800px){{aside{{position:static;width:auto;height:auto}}main{{margin:0;padding:20px}}}}
-</style><aside><h1>对比检查报告</h1><p>{esc(profile["title"])}</p><a href="#overview">概览</a><a href="#coverage">本次覆盖什么</a><div class="nav-label">详细检查</div>{nav}</aside><main><header id="overview" class="hero"><h1>{esc(profile["title"])}</h1><p>基于可验证的参考做法，识别可迁移的体验改进机会；不做产品优劣排名。</p><div class="metric">{count} <small>项可借鉴改进机会</small></div><p>本次已覆盖 {len(runs)} 项体验检查。</p></header>{coverage}<section id="details"><div class="detail-title"><h2>详细检查结果</h2><p>每项结论均基于本产品与参考产品页面中的可定位证据。</p></div>{''.join(cards)}</section></main></html>'''
+*{{box-sizing:border-box}}body{{margin:0;background:#f5f7fb;color:#182033;font:15px -apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif}}aside{{position:fixed;width:264px;height:100vh;background:#12233f;color:#dfe9f9;padding:32px 24px;overflow:auto}}aside h1{{font-size:18px;color:white;margin:0 0 9px}}aside p{{font-size:13px;line-height:1.5;color:#a9c1e2}}aside a{{display:block;color:#d8e6fa;text-decoration:none;padding:8px 0;border-bottom:1px solid #294361;font-size:13px}}aside .nav-label{{margin:22px 0 6px;color:#83a3cc;font-size:11px;font-weight:700;letter-spacing:.08em}}main{{margin-left:264px;max-width:1320px;padding:42px 54px 80px}}.hero{{background:linear-gradient(120deg,#183b70,#2367a7);color:#fff;border-radius:18px;padding:28px 32px;margin-bottom:28px}}.hero h1{{margin:0 0 10px;font-size:28px}}.metric{{font-size:32px;font-weight:700}}.metric small{{font-size:15px;font-weight:400}}.coverage{{background:#fff;border:1px solid #dce4f0;border-radius:14px;padding:24px 28px;margin:18px 0 28px;box-shadow:0 4px 14px #1525420c}}.section-kicker{{font-size:12px;color:#5d7190;font-weight:700;letter-spacing:.08em;margin:0 0 5px}}.coverage h2{{margin:0 0 8px}}.coverage-grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:14px;margin-top:18px}}.coverage-group{{border:1px solid #dfe6ef;border-radius:10px;padding:16px;background:#f9fbfe}}.coverage-group h3{{margin:0 0 6px;font-size:17px}}.coverage-group>p{{margin:0 0 12px;color:#5b6b81;font-size:13px}}.coverage-item{{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 0;border-top:1px solid #e7edf5}}.coverage-item span:first-child{{line-height:1.4}}.status{{white-space:nowrap;border-radius:12px;padding:3px 7px;font-size:12px;font-weight:600;background:#eef2f6;color:#56677e}}.status.fail{{background:#fff0e9;color:#b74619}}.status.pass{{background:#e7f5ed;color:#197047}}.not-covered{{margin-top:18px;padding:13px 16px;background:#f7f9fc;border-radius:9px;color:#52637a}}.not-covered b{{color:#33445d}}.detail-title{{margin:34px 0 12px;font-size:22px}}.detail-title p{{font-size:14px;color:#5b6b81;margin:4px 0}}.card{{background:#fff;border:1px solid #dce4f0;border-radius:14px;padding:24px 28px;margin:18px 0;box-shadow:0 4px 14px #1525420c}}.issue{{border-left:5px solid #dc6b37}}.pass{{border-left:5px solid #48a178}}.neutral{{border-left:5px solid #8291a7}}.cardtop{{display:flex;justify-content:space-between;color:#65758d;font-size:12px}}.pill{{border-radius:20px;padding:4px 9px;background:#e7f5ed;color:#197047;font-weight:600}}.neutral .pill{{background:#eef2f6;color:#56677e}}.issue .pill{{background:#fff0e9;color:#b74619}}h2{{font-size:19px;margin:14px 0}}p{{line-height:1.7;margin:7px 0}}.field{{padding:14px 16px;margin:13px 0;border-radius:9px;background:#f7f9fc;border:1px solid #e1e8f1}}.field>b{{display:block;color:#485971}}.evidence-grid,.shots{{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}}.evidence-grid .field{{margin:0}}.field article{{padding-top:6px;border-top:1px solid #dce5ee}}.field article:first-of-type{{border-top:0}}.suggestion{{background:#fff7f2;border-color:#f4d5c5}}.shots{{margin-top:20px}}figure{{margin:0;border:1px solid #dfe6ef;border-radius:10px;padding:10px;background:#f9fbfe}}figcaption{{font-weight:600;margin:0 0 8px}}img{{display:block;width:100%;max-height:520px;object-fit:contain;object-position:top;background:#fff}}.shot-button{{display:block;width:100%;padding:0;border:0;background:#fff;cursor:zoom-in}}.shot-button:focus-visible{{outline:3px solid #2367a7;outline-offset:3px}}.missing{{min-height:160px;padding:58px 16px;text-align:center;color:#7e8da3;background:#f0f3f8}}.image-lightbox{{position:fixed;inset:0;z-index:20;display:grid;place-items:center;align-content:center;gap:12px;padding:32px;background:#071426e6;cursor:zoom-out}}.image-lightbox[hidden]{{display:none}}.image-lightbox img{{width:auto;max-width:95vw;max-height:84vh;object-fit:contain;box-shadow:0 16px 50px #0008}}.image-lightbox p{{margin:0;color:#fff;text-align:center}}.lightbox-close{{position:fixed;top:18px;right:24px;width:40px;height:40px;border:0;border-radius:50%;background:#ffffff24;color:#fff;font-size:30px;line-height:1;cursor:pointer}}@media(max-width:800px){{aside{{position:static;width:auto;height:auto}}main{{margin:0;padding:20px}}}}
+</style><aside><h1>对比检查报告</h1><p>{esc(profile["title"])}</p><a href="#overview">概览</a><a href="#coverage">本次覆盖什么</a><div class="nav-label">详细检查</div>{nav}</aside><main><header id="overview" class="hero"><h1>{esc(profile["title"])}</h1><p>基于可验证的参考做法，识别可迁移的体验改进机会；不做产品优劣排名。</p><div class="metric">{count} <small>项可借鉴改进机会</small></div><p>本次已覆盖 {len(runs)} 项体验检查。</p></header>{coverage}<section id="details"><div class="detail-title"><h2>详细检查结果</h2><p>每项结论均基于本产品与参考产品页面中的可定位证据。点击截图可查看原尺寸。</p></div>{''.join(cards)}</section></main><div id="image-lightbox" class="image-lightbox" hidden role="dialog" aria-modal="true" aria-label="截图放大预览"><button type="button" class="lightbox-close" aria-label="关闭截图预览">×</button><img id="lightbox-image" alt=""><p id="lightbox-caption"></p></div><script>(()=>{{const box=document.getElementById('image-lightbox'),image=document.getElementById('lightbox-image'),caption=document.getElementById('lightbox-caption');const close=()=>{{box.hidden=true;image.removeAttribute('src')}};document.querySelectorAll('[data-enlarge-image]').forEach(button=>button.addEventListener('click',()=>{{image.src=button.dataset.enlargeImage;image.alt=button.dataset.enlargeLabel;caption.textContent=button.dataset.enlargeLabel;box.hidden=false}}));box.addEventListener('click',event=>{{if(event.target===box||event.target.closest('.lightbox-close'))close()}});document.addEventListener('keydown',event=>{{if(event.key==='Escape'&&!box.hidden)close()}});}})();</script></html>'''
 
     @staticmethod
     def _ordered_runs(profile: dict, runs: list[dict]) -> list[dict]:
@@ -170,6 +244,13 @@ class ComparisonOutputWriter:
     def _visual_cards(crops: dict, subject: dict, references: list[dict], esc) -> str:
         def figure(label: str, target_id: str) -> str:
             source = crops.get(target_id)
-            body = f'<img src="{source}" alt="{esc(label)} 局部截图，红框标示证据">' if source else '<div class="missing">未能根据元素坐标生成局部截图</div>'
+            accessible_label = f"{label} 局部截图，红框标示证据；点击查看大图"
+            body = (
+                f'<button type="button" class="shot-button" data-enlarge-image="{source}" '
+                f'data-enlarge-label="{esc(accessible_label)}" aria-label="{esc(accessible_label)}">'
+                f'<img src="{source}" alt="{esc(accessible_label)}"></button>'
+                if source
+                else '<div class="missing">未能根据可定位元素生成局部截图</div>'
+            )
             return f'<figure><figcaption>{esc(label)}</figcaption>{body}</figure>'
         return '<div class="shots">' + figure(f'本产品页面展示 · {subject.get("product", "")}', subject.get("target_id", "")) + ''.join(figure(f'参考产品页面展示 · {item.get("product", "")}', item.get("target_id", "")) for item in references) + '</div>'

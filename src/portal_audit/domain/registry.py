@@ -11,6 +11,7 @@ import yaml
 from portal_audit.domain.models import (
     CapabilityKind,
     CapabilityManifest,
+    ChecklistDefinition,
     CheckScope,
     CheckSpec,
     ComparisonProfile,
@@ -326,6 +327,35 @@ class ComparisonProfileRegistry:
 
     def all(self) -> list[ComparisonProfile]:
         return list(self._profiles.values())
+
+
+class ChecklistRegistry:
+    """Loads UI-editable checklist scenarios from declarative YAML."""
+
+    def __init__(self, root: Path):
+        self.root = root
+        self._checklists: dict[str, ChecklistDefinition] = {}
+
+    def load(self) -> ChecklistRegistry:
+        self.root.mkdir(parents=True, exist_ok=True)
+        checklists = [
+            ChecklistDefinition.model_validate(yaml.safe_load(path.read_text(encoding="utf-8")))
+            for path in sorted(self.root.glob("*.yaml"))
+        ]
+        StandardsRegistry._reject_duplicate_ids(checklists, "checklist")
+        for checklist in checklists:
+            StandardsRegistry._reject_duplicate_ids(checklist.items, f"checklist item in {checklist.id}")
+        self._checklists = {item.id: item for item in checklists}
+        return self
+
+    def all(self) -> list[ChecklistDefinition]:
+        return list(self._checklists.values())
+
+    def get(self, checklist_id: str) -> ChecklistDefinition:
+        try:
+            return self._checklists[checklist_id]
+        except KeyError as error:
+            raise ValueError(f"Unknown checklist: {checklist_id}") from error
 
 
 class PageMapRegistry:

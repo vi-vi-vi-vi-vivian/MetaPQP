@@ -74,6 +74,9 @@ criteria:
   - id: metapqp-internal/document-structure
     source_id: metapqp-internal
     title: 页面应具有描述主题的 Title
+  - id: metapqp-internal/page-title-identity-consistency
+    source_id: metapqp-internal
+    title: 浏览器页面标题应与当前页面主题一致
   - id: metapqp-internal/image-alt
     source_id: metapqp-internal
     title: 可点击图片控件（如 Logo）应具有可访问名称
@@ -107,6 +110,12 @@ criteria:
   - id: metapqp-internal/pricing-transparency
     source_id: metapqp-internal
     title: 价格、周期和资源量应能被独立核对
+  - id: metapqp-internal/purchase-selection-state-consistency
+    source_id: metapqp-internal
+    title: 购买配置选择应与订单摘要保持一致
+  - id: metapqp-internal/price-calculation-consistency
+    source_id: metapqp-internal
+    title: 页面报价应符合明示的单价、数量与优惠规则
   - id: metapqp-internal/product-value-clarity
     source_id: metapqp-internal
     title: 产品价值应清晰可理解

@@ -8,6 +8,7 @@ model_batches:
       - terminology-clarity
       - content-internal-consistency
       - product-value-clarity
+      - page-title-identity-consistency
   - id: transaction-decision
     evidence_profile: transaction_evidence
     check_specs:

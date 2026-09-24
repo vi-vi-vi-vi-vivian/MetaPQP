@@ -1,0 +1,18 @@
+id: officeace-awareness-to-advanced-purchase
+version: 1.0.0
+title: 从 OfficeAce 感知页进入个人高级版购买页
+from: officeace-awareness
+to: officeace-purchase
+action:
+  type: click
+  target:
+    role: button
+    name: 立即购买
+    exact: true
+    occurrence: 1
+end_condition:
+  page_map_node: officeace-purchase
+  url_contains: '#/shopping'
+risk_level: confirmation_only
+safe_stop: purchase_page_loaded
+auto_run: false

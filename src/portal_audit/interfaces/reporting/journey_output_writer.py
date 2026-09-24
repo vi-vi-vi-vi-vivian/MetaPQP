@@ -120,10 +120,13 @@ class JourneyOutputWriter:
         for page in embedded.get("pages", []):
             report_path = Path(page.get("output_dir") or "") / "report.html"
             if report_path.is_file():
-                page["embedded_report"] = _as_data_uri(
-                    self._inline_report_images(report_path),
-                    "text/html",
-                )
+                # ``data:`` URLs for a full report plus inlined screenshots can
+                # exceed what Chromium reliably loads inside an iframe.  srcdoc
+                # keeps the report portable while letting the browser parse it
+                # as an ordinary nested document.
+                page["embedded_report_html"] = self._inline_report_images(
+                    report_path
+                ).decode("utf-8")
         for run in embedded.get("journey_check_runs", []):
             for screenshot in run.get("evidence_screenshots", []):
                 source = run_dir / str(screenshot.get("path") or "")
@@ -190,6 +193,39 @@ class JourneyOutputWriter:
                 ),
                 None,
             )
+            local_document_size = page_result.snapshot.document_size
+            # Prefer the segment that actually contains the cited element.  A
+            # full-page image can be distorted by nested console scrollers.
+            if locations:
+                target_y = locations[0]["bounds"].get("y", 0)
+                segment = next(
+                    (
+                        artifact
+                        for artifact in page_result.snapshot.artifacts
+                        if artifact.kind == "screenshot_segment"
+                        and artifact.metadata.get("top", 0) <= target_y
+                        < artifact.metadata.get("top", 0) + artifact.metadata.get("height", 0)
+                        and Path(artifact.path).is_file()
+                    ),
+                    None,
+                )
+                if segment is not None:
+                    top = float(segment.metadata.get("top", 0))
+                    source = Path(segment.path)
+                    locations = [
+                        {
+                            **location,
+                            "bounds": {
+                                **location["bounds"],
+                                "y": location["bounds"].get("y", 0) - top,
+                            },
+                        }
+                        for location in locations
+                    ]
+                    local_document_size = {
+                        "width": segment.metadata.get("width", 1440),
+                        "height": segment.metadata.get("height", 1000),
+                    }
             if source is None:
                 continue
 
@@ -206,7 +242,7 @@ class JourneyOutputWriter:
                     source,
                     output,
                     locations,
-                    page_result.snapshot.document_size,
+                    local_document_size,
                     draw_annotations=not absence,
                 )
                 if locations
@@ -365,16 +401,10 @@ class JourneyOutputWriter:
             selected.append(location)
             if len(selected) == 2:
                 break
-        if not selected:
-            nearby_action = JourneyOutputWriter._locate_nearby_action(
-                snapshot,
-                [
-                    *sorted(quoted, key=narrative.find),
-                    *sorted(identifiers, key=narrative.find),
-                ],
-            )
-            if nearby_action:
-                selected.append(nearby_action)
+        # Do not infer a location from a nearby CTA.  That heuristic can make a
+        # report look precise while framing a different page element from the
+        # one described by the cross-stage finding.  When evidence cannot be
+        # mapped directly, the caller renders an unannotated context screenshot.
         return selected
 
     @staticmethod
@@ -547,7 +577,7 @@ class JourneyOutputWriter:
         embedded_page_reports = "".join(
             _embedded_page_report(item, index)
             for index, item in enumerate(payload["pages"], start=1)
-            if item.get("embedded_report")
+            if item.get("embedded_report_html")
         )
         issue_cards = "".join(
             _journey_check_card(item, status_labels, expanded=True)
@@ -645,7 +675,7 @@ def _page_card(item: dict, index: int) -> str:
     link = (
         f"<button class='page-link' type='button' data-page-report='page-report-{index}'>"
         "打开内嵌页面报告&nbsp; ↗</button>"
-        if item.get("embedded_report")
+        if item.get("embedded_report_html")
         else f"<a class='page-link' href='{html.escape(item['report'])}'>打开页面报告&nbsp; ↗</a>"
     )
     return (
@@ -667,7 +697,7 @@ def _embedded_page_report(item: dict, index: int) -> str:
         f"<dialog id='page-report-{index}' class='page-report-dialog'>"
         f"<header><strong>{html.escape(item['title'])}</strong>"
         "<button type='button' data-close-page-report>关闭</button></header>"
-        f"<iframe title='{html.escape(item['title'])}' src='{html.escape(item['embedded_report'])}'></iframe>"
+        f"<iframe title='{html.escape(item['title'])}' srcdoc='{html.escape(item['embedded_report_html'], quote=True)}'></iframe>"
         "</dialog>"
     )
 
@@ -751,6 +781,14 @@ def _journey_screenshot(value: dict) -> str:
 
 
 def _transition_check_card(item: dict, status_labels: dict[str, str]) -> str:
+    evidence = "".join(
+        f"<li>{html.escape(str(value))}</li>" for value in item.get("evidence", [])
+    )
+    suggestion = (
+        f"<div class='check-suggestion'><strong>建议</strong>{html.escape(item['suggestion'])}</div>"
+        if item.get("suggestion")
+        else ""
+    )
     return (
         f"<details class='check-card {item['status']}'>"
         "<summary><div class='check-top'>"
@@ -758,7 +796,8 @@ def _transition_check_card(item: dict, status_labels: dict[str, str]) -> str:
         f"<span class='status {item['status']}'>"
         f"{status_labels.get(item['status'], item['status'])}</span>"
         "</div></summary><div class='detail-body'>"
-        f"<p class='reason'>{html.escape(item['reason'])}</p></div></details>"
+        f"<p class='reason'>{html.escape(item['reason'])}</p>"
+        f"<ul class='check-evidence'>{evidence}</ul>{suggestion}</div></details>"
     )
 
 
@@ -776,7 +815,8 @@ def _action_card(trace: dict, index: int) -> str:
         "<span class='route-arrow'>→</span>"
         "<div class='route-node'>"
         f"<strong>{html.escape(trace['to_node_id'])}</strong>"
-        f"<span>{html.escape(trace.get('end_url') or '')}</span></div>"
+        f"<span>预期：{html.escape(trace.get('expected_entry_url') or trace.get('expected_url_contains') or '未登记')}</span>"
+        f"<span>实际：{html.escape(trace.get('end_url') or '未获取')}</span></div>"
         f"<span class='route-safe'>{html.escape(action.get('safety_decision') or '')}"
         "</span></div>"
     )

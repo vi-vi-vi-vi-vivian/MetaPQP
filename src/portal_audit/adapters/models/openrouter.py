@@ -20,6 +20,15 @@ from portal_audit.application.ports.model import (
 RETRYABLE_STATUS_CODES = {408, 409, 425, 429, 500, 502, 503, 504}
 
 
+class ModelProviderHTTPError(RuntimeError):
+    """HTTP failure safe for workflow logging and persistence.
+
+    httpx.HTTPStatusError retains request/response objects.  OpenJiuwen deep
+    copies exceptions while emitting structured logs, which makes that native
+    exception itself crash under some Python/httpx combinations.
+    """
+
+
 class OpenRouterModelAdapter:
     def __init__(
         self,
@@ -119,16 +128,12 @@ class OpenRouterModelAdapter:
                     if response.status_code not in RETRYABLE_STATUS_CODES:
                         if response.is_error:
                             detail = response.text.strip().replace("\n", " ")[:2_000]
-                            raise httpx.HTTPStatusError(
+                            raise ModelProviderHTTPError(
                                 f"OpenRouter HTTP {response.status_code}: {detail or 'empty response body'}",
-                                request=response.request,
-                                response=response,
                             )
                         return response
-                    last_error = httpx.HTTPStatusError(
+                    last_error = ModelProviderHTTPError(
                         f"retryable OpenRouter HTTP {response.status_code}",
-                        request=response.request,
-                        response=response,
                     )
                 except (httpx.TransportError, httpx.TimeoutException) as error:
                     last_error = error

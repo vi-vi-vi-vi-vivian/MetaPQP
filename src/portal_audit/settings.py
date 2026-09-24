@@ -22,7 +22,9 @@ class Settings(BaseSettings):
     data_root: Path = PROJECT_ROOT / "data"
     config_root: Path = PROJECT_ROOT / "config"
     skills_root: Path = PROJECT_ROOT / "skills"
-    workflow_timeout_seconds: float = 300
+    # A Page audit may safely observe many independent interactions.  Its
+    # workflow budget must outlive the per-navigation timeout.
+    workflow_timeout_seconds: float = 900
     progress_logs: bool = True
     openjiuwen_log_level: str = "WARNING"
     openjiuwen_console_logs: bool = False
@@ -57,7 +59,6 @@ class Settings(BaseSettings):
 
     browser_headless: bool = True
     browser_timeout_ms: int = 60_000
-    browser_max_links: int = 20
 
     auth_account_config_path: Path = PROJECT_ROOT / "config" / "auth" / "account.local.yaml"
     huaweicloud_auth_timeout_ms: int = 60_000

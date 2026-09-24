@@ -1,7 +1,7 @@
 id: reference-decision-information-proximity
-version: 1.0.0
+version: 1.1.0
 title: 关键决策信息是否在选择前说清
-description: 检查价格、优惠、限制、适用条件等关键决策信息是否可借鉴参考页面在决策点附近披露的做法。
+description: 仅在存在明确购买、订阅或方案选择 CTA 的同类决策区检查。仅将会实质改变选择或实际成本的信息视为关键，包括价格与计费周期、包含额度、超额处理、资格限制、退订规则，以及页面已明确存在的包年/年付优惠。参考页面在同类决策区直接披露而主体缺失时才可判为缺口；不要求罗列不适用的计费细则。若未采集到可证明包年优惠存在的官方页面证据，不得断言官网未展示，应待确认。
 scope: comparison
 tags: [comparison, decision]
 applies_when: {dimensions: [decision_info_proximity], page_roles: [awareness, purchase]}

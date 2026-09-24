@@ -1,7 +1,7 @@
 id: broken-links
-version: 1.4.0
+version: 1.5.0
 title: 页面可见链接不应确认失效
-description: 对有限数量的可见 HTTP 链接执行安全状态检查；HEAD 失败后使用 GET 复核，明确的 4xx 页面不存在状态判为失效，5xx、超时、连接错误、鉴权和限流只标记为待验证。
+description: 对初始页面及安全信息披露控件展开后新出现的可见 HTTP 链接执行状态检查；HEAD 失败后使用 GET 复核，明确的 4xx 页面不存在状态判为失效，5xx、超时、连接错误、鉴权和限流只标记为待验证。
 tags: [baseline, navigation]
 applies_when: {}
 required_evidence: [interactive_elements]

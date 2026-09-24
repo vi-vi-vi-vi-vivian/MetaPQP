@@ -10,6 +10,7 @@ from portal_audit.domain.models import (
     PageAssessment,
     PageContext,
     PageSnapshot,
+    Severity,
 )
 from portal_audit.domain.registry import CheckSpecRegistry
 
@@ -24,10 +25,18 @@ class AssessmentBuilder:
         findings = []
         for run in runs:
             spec = self.registry.get(run.check_spec_id)
+            # Page interaction results have their own before/after evidence
+            # table.  Do not duplicate them as static page findings in the
+            # right-hand issue list, where they lack their transition context.
+            if spec.scope.value == "transition":
+                continue
             is_visual_pending = (
                 run.status == CheckStatus.NEEDS_VERIFICATION and "visual" in spec.tags
             )
-            if run.status != CheckStatus.FAIL and not is_visual_pending:
+            is_terminology_pending = (
+                spec.id == "terminology-clarity" and run.status == CheckStatus.NEEDS_VERIFICATION
+            )
+            if run.status != CheckStatus.FAIL and not is_visual_pending and not is_terminology_pending:
                 continue
             findings.append(
                 Finding(
@@ -36,8 +45,8 @@ class AssessmentBuilder:
                     check_run_id=run.check_run_id,
                     check_spec_id=spec.id,
                     check_spec_version=spec.version,
-                    title=run.title,
-                    severity=run.severity,
+                    title="术语与计费描述不清晰" if is_terminology_pending else run.title,
+                    severity=Severity.P2 if is_terminology_pending else run.severity,
                     confidence=run.confidence,
                     evidence=run.reason,
                     evidence_refs=run.evidence,
@@ -45,7 +54,7 @@ class AssessmentBuilder:
                     standard_refs=spec.standard_refs,
                     suggestion_after=run.suggestion or "",
                     journey_stage_refs=[context.primary_journey_stage],
-                    verification_status=("pending" if is_visual_pending else "verified"),
+                    verification_status=("pending" if is_visual_pending or is_terminology_pending else "verified"),
                 )
             )
         coverage = (

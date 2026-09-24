@@ -5,6 +5,10 @@ from __future__ import annotations
 import json
 
 from portal_audit.application.ports.model import ModelPort, ModelRequest, TextContent
+from portal_audit.application.services.model_prompt_trace import (
+    model_request_trace,
+    safe_model_error,
+)
 from portal_audit.domain.models import (
     CheckExecutionResult,
     CheckRun,
@@ -88,18 +92,45 @@ class ModelSkillExecutor:
             "context": context.model_dump(mode="json"),
             "check_spec": spec.model_dump(mode="json"),
         }
-        completion = await self.model.complete_json(
-            ModelRequest(
-                system=(
-                    f"{skill.instructions}\n\n"
-                    "只依据提供的证据执行当前 CheckSpec；证据不足时返回 needs_verification。"
-                    "发现问题时，element_refs 只填写 page.elements 中能直接定位问题的 element_ref；"
-                    "通过或无法定位时返回空数组。"
-                ),
-                content=[TextContent(json.dumps(evidence, ensure_ascii=False))],
-                schema=RESULT_SCHEMA,
-            )
+        request = ModelRequest(
+            system=(
+                f"{skill.instructions}\n\n"
+                "只依据提供的证据执行当前 CheckSpec；证据不足时返回 needs_verification。"
+                "发现问题时，element_refs 只填写 page.elements 中能直接定位问题的 element_ref；"
+                "通过或无法定位时返回空数组。"
+            ),
+            content=[TextContent(json.dumps(evidence, ensure_ascii=False))],
+            schema=RESULT_SCHEMA,
         )
+        try:
+            completion = await self.model.complete_json(request)
+        except Exception as error:  # noqa: BLE001 - preserve the page report and prompt artifact
+            detail = safe_model_error(error)
+            return CheckExecutionResult(
+                check_runs=[
+                    CheckRun(
+                        check_spec_id=spec.id,
+                        check_spec_version=spec.version,
+                        status=CheckStatus.ERROR,
+                        title=spec.title,
+                        reason=f"未执行：模型调用失败（{detail}）",
+                        severity=spec.default_severity,
+                        confidence=0,
+                        executor_id=skill.name,
+                    )
+                ],
+                model_calls=[
+                    ModelCallRecord(
+                        batch_id=f"single:{spec.id}",
+                        check_spec_ids=[spec.id],
+                        provider=type(self.model).__name__,
+                        model=str(getattr(self.model, "model", "unknown")),
+                        error_type=type(error).__name__,
+                        error_detail=detail,
+                        prompt_trace=model_request_trace(request),
+                    )
+                ],
+            )
         result = completion.content
         by_ref = {item.element_ref: item for item in snapshot.evidence_elements}
         locations = [
@@ -142,6 +173,7 @@ class ModelSkillExecutor:
                     total_tokens=completion.total_tokens,
                     latency_ms=completion.latency_ms,
                     usage_details=dict(completion.usage_details),
+                    prompt_trace=model_request_trace(request),
                 )
             ],
         )

@@ -1,0 +1,6 @@
+id: purchase-selection-state-consistency-checker
+version: 1.0.0
+kind: deterministic
+supported_scopes: [transition]
+required_evidence: [transition_trace, start_snapshot, end_snapshot, quote_state]
+implementation: {entrypoint: "portal_audit.capabilities.checkers.transition:PurchaseSelectionStateConsistencyChecker"}

@@ -1,0 +1,7 @@
+id: transition-intent-result-consistency-skill
+version: 1.0.0
+kind: skill
+supported_scopes: [transition]
+modality: text
+required_evidence: [interaction_candidate, before_snapshot, after_snapshot, interaction_trace]
+implementation: {skill_id: transition-intent-result-consistency}

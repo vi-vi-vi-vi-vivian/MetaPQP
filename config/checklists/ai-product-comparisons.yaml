@@ -1,0 +1,105 @@
+id: ai-product-comparisons
+version: 1.0.0
+title: 四云 AI 产品页面对比
+description: 来自 docs/0907 的公开页面候选；用于比较华为云页面可借鉴的体验做法。
+items:
+  - id: token-plan-market
+    title: Token Plan 多模型套餐对比
+    scope: comparison
+    description: 比较套餐价值、免费体验、价格和工具接入方式。
+    target:
+      id: huawei-token-plan
+      product: 华为云 Token Plan
+      url: https://agentorchard.huaweicloud.com/tokenplan.html
+    references:
+      - id: aliyun-bailian
+        product: 阿里云百炼
+        url: https://www.aliyun.com/product/bailian
+      - id: tencent-tokenhub
+        product: 腾讯云 TokenHub
+        url: https://cloud.tencent.com/product/tokenhub
+      - id: volcengine-ark
+        product: 火山方舟
+        url: https://www.volcengine.com/product/ark
+    device: desktop
+    locale: zh-CN
+    auth_mode: "off"
+
+  - id: maas-model-discovery
+    title: MaaS 模型发现与调用对比
+    scope: comparison
+    description: 比较模型目录、适用场景、体验和调用决策信息。
+    target:
+      id: huawei-model-directory
+      product: 华为云百模千态
+      url: https://agentorchard.huaweicloud.com/models.html
+    references:
+      - id: aliyun-bailian
+        product: 阿里云百炼
+        url: https://www.aliyun.com/product/bailian
+      - id: tencent-tokenhub
+        product: 腾讯云 TokenHub
+        url: https://cloud.tencent.com/product/tokenhub
+      - id: volcengine-ark
+        product: 火山方舟
+        url: https://www.volcengine.com/product/ark
+    device: desktop
+    locale: zh-CN
+    auth_mode: "off"
+
+  - id: codearts-coding-assistant
+    title: CodeArts AI 编程助手对比
+    scope: comparison
+    description: 比较开发者的产品理解、体验入口、下载和订阅决策。
+    target:
+      id: huawei-codearts
+      product: 华为云码道 CodeArts
+      url: https://codearts.huaweicloud.com/
+    references:
+      - id: aliyun-qoder
+        product: 阿里云 Qoder CN
+        url: https://www.aliyun.com/product/lingma
+      - id: tencent-codebuddy
+        product: 腾讯云 CodeBuddy
+        url: https://cloud.tencent.com/product/acc
+    device: desktop
+    locale: zh-CN
+    auth_mode: "off"
+
+  - id: agentarts-enterprise-agent
+    title: AgentArts 智能体开发与企业落地对比
+    scope: comparison
+    description: 比较智能体构建、部署、治理、体验入口和关键决策信息。
+    target:
+      id: huawei-agentarts
+      product: 华为云智果 AgentArts
+      url: https://www.huaweicloud.com/product/agentarts.html
+    references:
+      - id: aliyun-bailian
+        product: 阿里云百炼
+        url: https://www.aliyun.com/product/bailian
+      - id: tencent-workbuddy-enterprise
+        product: 腾讯云 WorkBuddy Enterprise
+        url: https://cloud.tencent.com/product/workbuddy-enterprise
+      - id: volcengine-agentkit
+        product: 火山 AgentKit
+        url: https://www.volcengine.com/product/agentkit
+    device: desktop
+    locale: zh-CN
+    auth_mode: "off"
+
+  - id: officeace-workbuddy
+    title: OfficeAce 办公智能体对比
+    scope: comparison
+    description: 比较办公任务结果展示、可体验性、使用前信息和任务连续性。
+    target:
+      id: huawei-officeace
+      product: 华为云果办 OfficeAce
+      url: https://www.huaweicloud.com/product/agentarts/officeace.html
+    references:
+      - id: tencent-workbuddy
+        product: 腾讯云 WorkBuddy
+        url: https://intl.cloud.tencent.com/zh/products/workbuddy
+    device: desktop
+    locale: zh-CN
+    auth_mode: "off"

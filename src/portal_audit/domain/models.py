@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from enum import StrEnum
-from typing import Any
+from typing import Any, Literal
 from uuid import uuid4
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 def utc_now() -> datetime:
@@ -77,6 +77,15 @@ class ComparisonMode(StrEnum):
     ADJACENT = "adjacent"
     ANCHOR_TO_EACH = "anchor_to_each"
     ALL_OBSERVED = "all_observed"
+
+
+class ComparisonExecutionStrategy(StrEnum):
+    """How a comparison distributes evidence across model requests."""
+
+    AUTO = "auto"
+    ALL_REFERENCES = "all_references"
+    EVIDENCE_ROUTED = "evidence_routed"
+    PAIRWISE = "pairwise"
 
 
 class ActionRiskLevel(StrEnum):
@@ -180,6 +189,10 @@ class ArtifactRef(BaseModel):
 
 
 class InteractiveElement(BaseModel):
+    aria_expanded: str | None = None
+    aria_controls: str | None = None
+    has_click_handler: bool = False
+    image_only: bool = False
     element_ref: str | None = None
     tag: str
     role: str | None = None
@@ -189,6 +202,23 @@ class InteractiveElement(BaseModel):
     selector: str | None = None
     bounds: dict[str, float] | None = None
     enabled: bool = True
+    page_region: str | None = None
+    configuration_group: str | None = None
+    configuration_option: str | None = None
+    selection_selected: bool | None = None
+
+
+class InteractionCandidate(BaseModel):
+    """One page-local interaction considered independently from a Journey."""
+
+    candidate_id: str = Field(default_factory=lambda: new_id("interaction"))
+    element: InteractiveElement
+    kind: str
+    risk_level: ActionRiskLevel
+    execution_decision: str
+    decision_reason: str = ""
+    surrounding_text: str = ""
+    configuration_steps: list[InteractiveElement] = Field(default_factory=list)
 
 
 class EvidenceElement(BaseModel):
@@ -210,6 +240,11 @@ class EvidenceElement(BaseModel):
     client_height: float | None = None
     scroll_height: float | None = None
     computed_style: dict[str, str] = Field(default_factory=dict)
+    image_complete: bool | None = None
+    natural_width: int | None = None
+    natural_height: int | None = None
+    current_src: str | None = None
+    page_region: str | None = None
 
 
 class ElementLocation(BaseModel):
@@ -232,6 +267,9 @@ class MobileLayoutEvidence(BaseModel):
 
 
 class PageSnapshot(BaseModel):
+    interaction_state: dict[str, Any] = Field(default_factory=dict)
+    quote_state: dict[str, Any] = Field(default_factory=dict)
+    content_ready: bool | None = None
     snapshot_id: str = Field(default_factory=lambda: new_id("snapshot"))
     page_id: str
     requested_url: str
@@ -244,6 +282,7 @@ class PageSnapshot(BaseModel):
     body_text: str = ""
     headings: list[dict[str, Any]] = Field(default_factory=list)
     interactive_elements: list[InteractiveElement] = Field(default_factory=list)
+    link_probe_results: list[dict[str, Any]] = Field(default_factory=list)
     evidence_elements: list[EvidenceElement] = Field(default_factory=list)
     console_errors: list[str] = Field(default_factory=list)
     network_errors: list[dict[str, Any]] = Field(default_factory=list)
@@ -358,6 +397,9 @@ class ExecutionBatch(BaseModel):
     check_spec_ids: list[str]
     evidence_profile: str = "text"
     model_profile: str | None = None
+    subject_node_ids: list[str] = Field(default_factory=list)
+    reference_node_ids: list[str] = Field(default_factory=list)
+    evidence_region_kinds: list[str] = Field(default_factory=list)
 
 
 class CheckInvocation(BaseModel):
@@ -410,6 +452,12 @@ class ModelCallRecord(BaseModel):
     total_tokens: int | None = None
     latency_ms: int | None = None
     usage_details: dict[str, Any] = Field(default_factory=dict)
+    # Effective system/user messages and response schema, recorded for audit
+    # review. Image bytes are intentionally omitted; their artifact paths are
+    # recorded instead.
+    prompt_trace: dict[str, Any] | None = None
+    error_type: str | None = None
+    error_detail: str | None = None
 
 
 class CheckExecutionResult(BaseModel):
@@ -460,6 +508,7 @@ class AuditResult(BaseModel):
     check_plan: CheckPlan
     assessment: PageAssessment
     model_calls: list[ModelCallRecord] = Field(default_factory=list)
+    interaction_traces: list[InteractionTrace] = Field(default_factory=list)
     output_dir: str | None = None
 
 
@@ -480,6 +529,15 @@ class ComparisonCoverageGroup(BaseModel):
     title: str
     description: str
     check_spec_ids: list[str] = Field(min_length=1)
+    evidence_region_kinds: list[str] = Field(default_factory=list)
+
+
+class ComparisonExecutionPolicy(BaseModel):
+    """Cost and evidence-routing policy for a reusable comparison profile."""
+
+    strategy: ComparisonExecutionStrategy = ComparisonExecutionStrategy.AUTO
+    all_references_max: int = Field(default=1, ge=1)
+    all_references_max_estimated_tokens: int = Field(default=30_000, ge=1)
 
 
 class ComparisonProfile(BaseModel):
@@ -491,6 +549,7 @@ class ComparisonProfile(BaseModel):
     dimensions: list[str] = Field(min_length=1)
     coverage_groups: list[ComparisonCoverageGroup] = Field(min_length=1)
     not_covered: list[str] = Field(default_factory=list)
+    execution: ComparisonExecutionPolicy = Field(default_factory=ComparisonExecutionPolicy)
 
 
 class ComparisonRequest(BaseModel):
@@ -500,6 +559,45 @@ class ComparisonRequest(BaseModel):
     device: str = "desktop"
     locale: str = "zh-CN"
     audit_profile: str = "comparison-mvp"
+    execution_strategy: ComparisonExecutionStrategy | None = None
+
+
+class ChecklistItem(BaseModel):
+    """A UI-editable, runnable scenario kept independently from Markdown checklists."""
+
+    id: str
+    title: str
+    scope: Literal["page", "comparison", "journey"]
+    description: str = ""
+    enabled: bool = True
+    target: BenchmarkTarget | None = None
+    references: list[BenchmarkTarget] = Field(default_factory=list)
+    journey_id: str | None = None
+    device: str = "desktop"
+    locale: str = "zh-CN"
+    auth_mode: AuthMode = AuthMode.AUTO
+    audit_profile: str | None = None
+    comparison_execution_strategy: ComparisonExecutionStrategy | None = None
+
+    @model_validator(mode="after")
+    def validate_execution_contract(self) -> ChecklistItem:
+        if self.scope in {"page", "comparison"} and self.target is None:
+            raise ValueError(f"Checklist item {self.id} requires target")
+        if self.scope == "comparison" and not self.references:
+            raise ValueError(f"Checklist item {self.id} requires at least one reference")
+        if self.scope == "journey" and not self.journey_id:
+            raise ValueError(f"Checklist item {self.id} requires journey_id")
+        return self
+
+
+class ChecklistDefinition(BaseModel):
+    """Versioned set of scenarios that can be managed through the local UI."""
+
+    id: str
+    version: str = "1.0.0"
+    title: str
+    description: str = ""
+    items: list[ChecklistItem] = Field(default_factory=list)
 
 
 class ComparisonAssessment(BaseModel):
@@ -660,12 +758,23 @@ class TransitionTrace(BaseModel):
     end_snapshot_id: str | None = None
     start_url: str
     end_url: str | None = None
+    expected_entry_url: str | None = None
+    expected_url_contains: str | None = None
     redirect_chain: list[str] = Field(default_factory=list)
     action: ActionRecord
     end_resolution: PageMapNodeResolution | None = None
     safe_stop: str
     status: str
     termination_reason: str
+
+
+class InteractionTrace(BaseModel):
+    """A Page-discovered candidate and its isolated before/after observation."""
+
+    candidate: InteractionCandidate
+    trace: TransitionTrace
+    before_snapshot: PageSnapshot
+    after_snapshot: PageSnapshot | None = None
 
 
 class JourneyAuditRequest(BaseModel):

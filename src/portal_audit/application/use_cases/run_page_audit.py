@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-import hashlib
+import json
+import re
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from portal_audit.application.services.assessment_builder import AssessmentBuilder
@@ -30,6 +31,10 @@ class PageAuditPipeline:
         check_executor: CheckExecutor,
         assessment_builder: AssessmentBuilder,
         output_writer,
+        interaction_discovery=None,
+        transition_plan_builder=None,
+        transition_executor=None,
+        interaction_semantic_executor=None,
         progress: ProgressReporter | None = None,
         evidence_gate: PageEvidenceGate | None = None,
     ):
@@ -39,6 +44,10 @@ class PageAuditPipeline:
         self.check_executor = check_executor
         self.assessment_builder = assessment_builder
         self.output_writer = output_writer
+        self.interaction_discovery = interaction_discovery
+        self.transition_plan_builder = transition_plan_builder
+        self.transition_executor = transition_executor
+        self.interaction_semantic_executor = interaction_semantic_executor
         self.progress = progress or ProgressReporter()
         self.evidence_gate = evidence_gate or PageEvidenceGate()
 
@@ -81,7 +90,7 @@ class PageAuditPipeline:
 
     @staticmethod
     def target_for(request: PageAuditRequest) -> PageTarget:
-        page_id = request.page_id or f"page-{hashlib.sha256(request.url.encode()).hexdigest()[:12]}"
+        page_id = request.page_id or PageAuditPipeline._readable_page_id(request.url)
         target_url = PageAuditPipeline._localized_console_url(request.url, request.locale)
         return PageTarget(
             page_id=page_id,
@@ -92,6 +101,27 @@ class PageAuditPipeline:
             device=request.device,
             locale=request.locale,
         )
+
+    @staticmethod
+    def _readable_page_id(url: str) -> str:
+        """Derive a stable human-readable id when the CLI page id is omitted."""
+        parsed = urlsplit(url)
+        fragment_path, _, fragment_query = parsed.fragment.partition("?")
+        route = fragment_path.rstrip("/").split("/")[-1] or parsed.path.rstrip("/").split("/")[-1]
+        route = {"shopping": "purchase"}.get(route.casefold(), route)
+        product = ""
+        query = dict(parse_qsl(fragment_query, keep_blank_values=True))
+        try:
+            product_list = json.loads(query.get("product_list", "[]"))
+            sku = str(product_list[0].get("skuCode", "")) if product_list else ""
+            product = sku.split(".", 1)[0]
+        except (json.JSONDecodeError, AttributeError, IndexError, TypeError):
+            product = ""
+        if not product:
+            product = (parsed.hostname or "page").split(".")[0]
+        raw = "-".join(value for value in (product, route) if value)
+        slug = re.sub(r"[^a-z0-9]+", "-", raw.casefold()).strip("-")
+        return slug or "page"
 
     @staticmethod
     def _localized_console_url(url: str, locale: str) -> str:
@@ -183,6 +213,45 @@ class PageAuditPipeline:
             PageSnapshot.model_validate(state["snapshot"]),
             PageContext.model_validate(state["context"]),
         )
+        transition_runs = []
+        if self.interaction_discovery and self.transition_plan_builder and self.transition_executor:
+            request = PageAuditRequest.model_validate(state["request"])
+            target = __import__("portal_audit.domain.models", fromlist=["PageTarget"]).PageTarget.model_validate(state["target"])
+            snapshot = PageSnapshot.model_validate(state["snapshot"])
+            candidates = self.interaction_discovery.discover(snapshot)
+            interaction_started_at = self.progress.stage_start(
+                "4a/6 页面交互检查", f"正在隔离执行安全交互；发现 {len(candidates)} 个候选……"
+            )
+            auth = await self.baseline.auth_provider.prepare(target, request.auth_mode) if self.baseline.auth_provider and request.auth_mode.value != "off" else None
+            traces = await self.baseline.browser.inspect_interactions(
+                target, f"{state['job_id']}-interactions", candidates, auth
+            )
+            for item in traces:
+                if item.candidate.execution_decision != "allowed" or item.after_snapshot is None or item.trace.status != "completed":
+                    continue
+                plan = self.transition_plan_builder.build(
+                    item.trace.transition_id, origin="page",
+                    interaction_kind=item.candidate.kind,
+                )
+                item_runs = self.transition_executor.execute(
+                    plan, item.trace, item.before_snapshot, item.after_snapshot
+                )
+                for run in item_runs:
+                    run.invocation_id = f"{run.check_spec_id}__{item.candidate.candidate_id}"
+                transition_runs.extend(item_runs)
+            semantic_runs, semantic_calls = (
+                await self.interaction_semantic_executor.execute(traces)
+                if self.interaction_semantic_executor else ([], [])
+            )
+            transition_runs.extend(semantic_runs)
+            execution.check_runs.extend(transition_runs)
+            execution.model_calls.extend(semantic_calls)
+            self.progress.stage_complete(interaction_started_at, (
+                f"已完成：{sum(x.trace.status == 'completed' for x in traces)} 个",
+                f"已暂停：{sum(x.trace.status == 'paused' for x in traces)} 个",
+                f"跳过：{sum(x.trace.status == 'skipped' for x in traces)} 个",
+            ))
+            state = {**state, "interaction_traces": [item.model_dump(mode="json") for item in traces]}
         counts = {
             status: sum(run.status.value == status for run in execution.check_runs)
             for status in ("pass", "fail", "needs_verification", "error")
@@ -223,6 +292,7 @@ class PageAuditPipeline:
     async def persist(self, state: dict) -> dict:
         from portal_audit.domain.models import (
             CheckPlan,
+            InteractionTrace,
             ModelCallRecord,
             PageAssessment,
             PageContext,
@@ -241,6 +311,10 @@ class PageAuditPipeline:
             check_plan=CheckPlan.model_validate(state["check_plan"]),
             assessment=PageAssessment.model_validate(state["assessment"]),
             model_calls=[ModelCallRecord.model_validate(item) for item in state["model_calls"]],
+            interaction_traces=[
+                InteractionTrace.model_validate(item)
+                for item in state.get("interaction_traces", [])
+            ],
         )
         output_dir = self.output_writer.write(result)
         result.output_dir = str(output_dir)

@@ -8,6 +8,7 @@ from pathlib import Path
 import yaml
 
 from portal_audit.application.ports.model import ModelPort, ModelRequest, TextContent
+from portal_audit.application.services.model_prompt_trace import model_request_trace
 from portal_audit.domain.models import (
     CheckInvocation,
     CheckPlan,
@@ -17,6 +18,7 @@ from portal_audit.domain.models import (
     ComparisonAssessment,
     ComparisonDisplayEvidence,
     ComparisonEvidenceBundle,
+    ComparisonExecutionStrategy,
     ComparisonFindingDetail,
     ComparisonPageCapture,
     ComparisonPageEvidence,
@@ -117,26 +119,54 @@ class ComparisonEvidenceBuilder:
                     }
                 )
             if facts:
+                kind, kinds = ComparisonEvidenceBuilder._region_kinds(
+                    bucket["title"],
+                    facts,
+                    is_page_shell=bucket["id"] == "region-top",
+                    is_hero=bucket["id"] == "region-1",
+                )
                 regions.append(
                     {
                         "id": bucket["id"],
                         "title": bucket["title"],
-                        "kind": ComparisonEvidenceBuilder._region_kind(bucket["title"], facts),
+                        "kind": kind,
+                        "kinds": kinds,
                         "facts": facts,
                     }
                 )
         return regions
 
     @staticmethod
-    def _region_kind(title: str, facts: list[dict]) -> str:
+    def _region_kinds(
+        title: str,
+        facts: list[dict],
+        *,
+        is_page_shell: bool,
+        is_hero: bool,
+    ) -> tuple[str, list[str]]:
+        if is_page_shell:
+            return "page_shell", ["page_shell"]
         text = " ".join([title, *(str(item.get("text") or "") for item in facts)]).lower()
-        if any(word in text for word in ("套餐", "方案", "价格", "定价", "month", "year", "plan", "pricing")):
-            return "offer_selection"
+        kinds: list[str] = ["hero"] if is_hero else []
+        if any(word in text for word in ("套餐", "方案", "价格", "定价", "月付", "年付", "month", "year", "pricing")):
+            kinds.append("offer_selection")
         if any(word in text for word in ("试用", "体验", "预览", "免费", "trial", "preview", "free")):
-            return "zero_cost_access"
+            kinds.append("zero_cost_access")
         if any(word in text for word in ("案例", "结果", "报告", "成果", "example", "result", "case")):
-            return "outcome_visibility"
-        return "general"
+            kinds.append("outcome_visibility")
+        if any(word in text for word in (
+            "限制", "条件", "资格", "额度", "配额", "上限", "前提", "要求", "风险",
+            "limit", "condition", "requirement", "quota", "eligibility",
+        )):
+            kinds.append("commitment_boundary")
+        if any(word in text for word in (
+            "继续", "已选", "保存", "恢复", "下一步", "状态", "continue", "selected",
+            "resume", "state",
+        )):
+            kinds.append("state_continuity")
+        if not kinds:
+            kinds.append("general")
+        return kinds[0], kinds
 
 
 class ComparisonCheckPlanBuilder:
@@ -150,8 +180,9 @@ class ComparisonCheckPlanBuilder:
     def build(
         self,
         audit_profile: str,
-        dimensions: list[str],
+        comparison_profile,
         evidence: ComparisonEvidenceBundle,
+        strategy_override: ComparisonExecutionStrategy | None = None,
     ) -> CheckPlan:
         payload = yaml.safe_load(
             (self.profiles_root / f"{audit_profile}.yaml").read_text(encoding="utf-8")
@@ -164,7 +195,11 @@ class ComparisonCheckPlanBuilder:
                 continue
             applicable = (
                 spec.id in enabled
-                and bool(set(spec.applies_when.get("dimensions", [])).intersection(dimensions))
+                and bool(
+                    set(spec.applies_when.get("dimensions", [])).intersection(
+                        comparison_profile.dimensions
+                    )
+                )
             )
             decision = PlanDecision(
                 check_spec_id=spec.id,
@@ -177,13 +212,24 @@ class ComparisonCheckPlanBuilder:
                 executor=spec.executor if applicable else None,
             )
             (selected if applicable else skipped).append(decision)
+        strategy = self._resolve_strategy(
+            strategy_override or comparison_profile.execution.strategy,
+            comparison_profile.execution.all_references_max,
+            comparison_profile.execution.all_references_max_estimated_tokens,
+            evidence,
+        )
+        batches = self._execution_batches(
+            strategy, selected, comparison_profile, evidence
+        )
         invocations = [
             CheckInvocation(
                 invocation_id=f"{item.check_spec_id}__{evidence.subject.target_id}",
                 check_spec_id=item.check_spec_id,
                 subject_node_ids=[evidence.subject.target_id],
                 reference_node_ids=[item.target_id for item in evidence.references],
-                comparison_mode="anchor_to_each",
+                comparison_mode=(
+                    "anchor_to_each" if strategy != ComparisonExecutionStrategy.PAIRWISE else "adjacent"
+                ),
                 evidence_facets=["subject_page", "reference_pages"],
             )
             for item in selected
@@ -194,17 +240,66 @@ class ComparisonCheckPlanBuilder:
             model_execution_mode=ModelExecutionMode.GROUPED,
             selected=selected,
             skipped=skipped,
-            execution_batches=[
-                ExecutionBatch(
-                    batch_id="comparison-text",
-                    mode=ExecutionBatchMode.MODEL_BATCH,
-                    check_spec_ids=[item.check_spec_id for item in selected],
-                    evidence_profile="comparison_evidence",
-                    model_profile="default-text",
-                )
-            ] if selected else [],
+            execution_batches=batches,
             invocations=invocations,
         )
+
+    @staticmethod
+    def _resolve_strategy(
+        requested: ComparisonExecutionStrategy,
+        all_references_max: int,
+        all_references_max_estimated_tokens: int,
+        evidence: ComparisonEvidenceBundle,
+    ) -> ComparisonExecutionStrategy:
+        if requested != ComparisonExecutionStrategy.AUTO:
+            return requested
+        estimated_tokens = len(
+            json.dumps(ComparisonCheckExecutor._model_evidence(evidence), ensure_ascii=False)
+        ) // 4
+        if (
+            len(evidence.references) <= all_references_max
+            and estimated_tokens <= all_references_max_estimated_tokens
+        ):
+            return ComparisonExecutionStrategy.ALL_REFERENCES
+        return ComparisonExecutionStrategy.EVIDENCE_ROUTED
+
+    @staticmethod
+    def _execution_batches(
+        strategy: ComparisonExecutionStrategy,
+        selected: list[PlanDecision],
+        comparison_profile,
+        evidence: ComparisonEvidenceBundle,
+    ) -> list[ExecutionBatch]:
+        selected_ids = {item.check_spec_id for item in selected}
+        base = {
+            "mode": ExecutionBatchMode.MODEL_BATCH,
+            "evidence_profile": "comparison_evidence",
+            "model_profile": "default-text",
+            "subject_node_ids": [evidence.subject.target_id],
+        }
+        if not selected:
+            return []
+        if strategy == ComparisonExecutionStrategy.ALL_REFERENCES:
+            return [ExecutionBatch(
+                batch_id="comparison-all-references",
+                check_spec_ids=sorted(selected_ids),
+                reference_node_ids=[item.target_id for item in evidence.references],
+                **base,
+            )]
+        if strategy == ComparisonExecutionStrategy.PAIRWISE:
+            return [ExecutionBatch(
+                batch_id=f"comparison-pair-{index}",
+                check_spec_ids=sorted(selected_ids),
+                reference_node_ids=[item.target_id],
+                **base,
+            ) for index, item in enumerate(evidence.references, start=1)]
+        return [ExecutionBatch(
+            batch_id=f"comparison-route-{group.id}",
+            check_spec_ids=[item for item in group.check_spec_ids if item in selected_ids],
+            reference_node_ids=[item.target_id for item in evidence.references],
+            evidence_region_kinds=group.evidence_region_kinds,
+            **base,
+        ) for group in comparison_profile.coverage_groups if set(group.check_spec_ids).intersection(selected_ids)]
 
 
 class ComparisonCheckExecutor:
@@ -218,66 +313,136 @@ class ComparisonCheckExecutor:
     ) -> tuple[list[CheckRun], list[ComparisonFindingDetail], list[ModelCallRecord]]:
         if not plan.invocations:
             return [], [], []
-        specs = [self.specs.get(item.check_spec_id) for item in plan.invocations]
+        specs = [self.specs.get(item.check_spec_id) for item in plan.selected]
         if not self.model.enabled:
             return [self._unavailable(spec) for spec in specs], [], []
-        skill = self.skills.load(specs[0].executor.capability_id)
-        completion = await self.model.complete_json(
-            ModelRequest(
+        outcomes: dict[str, list[tuple[CheckRun, ComparisonFindingDetail | None]]] = {
+            spec.id: [] for spec in specs
+        }
+        model_calls: list[ModelCallRecord] = []
+        for batch in plan.execution_batches:
+            batch_specs = [self.specs.get(item) for item in batch.check_spec_ids]
+            if not batch_specs:
+                continue
+            skill = self.skills.load(batch_specs[0].executor.capability_id)
+            invocations = [
+                {
+                    "invocation_id": f"{spec.id}__{batch.batch_id}",
+                    "check_spec_id": spec.id,
+                    "subject_node_ids": batch.subject_node_ids,
+                    "reference_node_ids": batch.reference_node_ids,
+                    "comparison_mode": "anchor_to_each",
+                    "evidence_facets": ["subject_page", "reference_pages"],
+                }
+                for spec in batch_specs
+            ]
+            request = ModelRequest(
                 system=skill.instructions + self._system_suffix(),
                 content=[TextContent(json.dumps({
-                    "invocations": [item.model_dump(mode="json") for item in plan.invocations],
-                    "checks": [{"id": item.id, "title": item.title, "description": item.description} for item in specs],
-                    "evidence": self._model_evidence(evidence),
+                    "invocations": invocations,
+                    "checks": [
+                        {"id": item.id, "title": item.title, "description": item.description}
+                        for item in batch_specs
+                    ],
+                    "evidence": self._model_evidence(
+                        evidence,
+                        batch.reference_node_ids,
+                        batch.evidence_region_kinds,
+                    ),
                 }, ensure_ascii=False))],
-                schema=self._schema([item.id for item in specs]),
+                schema=self._schema([item.id for item in batch_specs]),
             )
+            completion = await self.model.complete_json(request)
+            raw_by_id = {
+                item.get("check_spec_id"): item
+                for item in completion.content.get("results", [])
+            }
+            for spec in batch_specs:
+                outcomes[spec.id].append(
+                    self._result(spec, raw_by_id.get(spec.id), evidence)
+                )
+            model_calls.append(
+                ModelCallRecord(
+                    batch_id=batch.batch_id,
+                    check_spec_ids=[item.id for item in batch_specs],
+                    provider=completion.provider,
+                    model=completion.model,
+                    provider_request_id=completion.provider_request_id,
+                    prompt_tokens=completion.prompt_tokens,
+                    completion_tokens=completion.completion_tokens,
+                    total_tokens=completion.total_tokens,
+                    latency_ms=completion.latency_ms,
+                    usage_details=dict(completion.usage_details),
+                    prompt_trace=model_request_trace(request),
+                )
+            )
+        resolved = [self._resolve_outcomes(spec, outcomes[spec.id]) for spec in specs]
+        return (
+            [run for run, _ in resolved],
+            [detail for _, detail in resolved if detail is not None],
+            model_calls,
         )
 
-        raw_by_id = {item.get("check_spec_id"): item for item in completion.content.get("results", [])}
-        runs: list[CheckRun] = []
-        details: list[ComparisonFindingDetail] = []
-        for spec in specs:
-            run, detail = self._result(spec, raw_by_id.get(spec.id), evidence)
-            runs.append(run)
-            if detail is not None:
-                details.append(detail)
-        return runs, details, [
-            ModelCallRecord(
-                batch_id="comparison-text", check_spec_ids=[item.id for item in specs],
-                provider=completion.provider, model=completion.model,
-                provider_request_id=completion.provider_request_id,
-                prompt_tokens=completion.prompt_tokens, completion_tokens=completion.completion_tokens,
-                total_tokens=completion.total_tokens, latency_ms=completion.latency_ms,
-                usage_details=dict(completion.usage_details),
-            )
-        ]
-
     @staticmethod
-    def _model_evidence(evidence: ComparisonEvidenceBundle) -> dict:
-        """Send compact region facts; full DOM remains local for verification and crops."""
+    def _model_evidence(
+        evidence: ComparisonEvidenceBundle,
+        reference_node_ids: list[str] | None = None,
+        evidence_region_kinds: list[str] | None = None,
+    ) -> dict:
+        """Route local, complete evidence into a model-sized comparison view."""
 
         def page(item: ComparisonPageEvidence) -> dict:
+            regions = item.regions
+            evidence_status = "full"
+            if evidence_region_kinds:
+                regions = [
+                    region for region in regions
+                    if set(region.get("kinds", [region.get("kind")])).intersection(
+                        evidence_region_kinds
+                    )
+                ]
+                if not regions:
+                    evidence_status = "no_matching_regions"
             return {
                 "target_id": item.target_id,
                 "product": item.product,
                 "title": item.title,
-                "regions": item.regions,
+                "evidence_status": evidence_status,
+                "regions": regions,
             }
 
         return {
             "subject": page(evidence.subject),
-            "references": [page(item) for item in evidence.references],
+            "references": [
+                page(item) for item in evidence.references
+                if reference_node_ids is None or item.target_id in reference_node_ids
+            ],
         }
 
     @staticmethod
+    def _resolve_outcomes(
+        spec, outcomes: list[tuple[CheckRun, ComparisonFindingDetail | None]]
+    ) -> tuple[CheckRun, ComparisonFindingDetail | None]:
+        """Keep one reportable conclusion when pairwise batches inspect one rule repeatedly."""
+        if not outcomes:
+            return ComparisonCheckExecutor._unavailable(spec), None
+        order = {
+            CheckStatus.FAIL: 0,
+            CheckStatus.NEEDS_VERIFICATION: 1,
+            CheckStatus.PASS: 2,
+            CheckStatus.NOT_APPLICABLE: 3,
+            CheckStatus.ERROR: 4,
+        }
+        return min(outcomes, key=lambda item: order.get(item[0].status, 99))
+
+    @staticmethod
     def _system_suffix() -> str:
-        return "\n\n你在做参考产品启发式检查，不判定谁更好。只有参考做法、主体缺口和可迁移用户收益均被页面证据证明时才返回 fail。对于套餐、价格、权益、限制或方案选择类结论，双方引用必须来自相同的决策区域；全站导航或产品 Hero 的通用按钮不能替代套餐/方案区域。fail 必须提供问题描述、主体展示内容、每个参考页展示内容、具体修改建议，以及双方 element_ref；置信度必须>=0.8。其他情况返回 pass 或 needs_verification。不得根据品牌、视觉偏好或无证据推断。所有文字使用简体中文。"
+        return "\n\n你在做参考产品启发式检查，不判定谁更好。只有参考做法、主体缺口和可迁移用户收益均被页面证据证明时才返回 fail。对于套餐、价格、权益、限制或方案选择类结论，双方引用必须来自相同的决策区域；全站导航或产品 Hero 的通用按钮不能替代套餐/方案区域。若 evidence_status 为 no_matching_regions，说明本批次没有采集到该页面的相关分区：不得用导航代替，必须返回 needs_verification。fail 必须提供问题描述、主体展示内容、每个参考页展示内容、具体修改建议，以及双方 element_ref；置信度必须>=0.8。subject_display 与 reference_displays 的每一项只能陈述其 element_ref 对应的可见原文，不能混入相邻区域、页面总结或离屏轮播内容。若无法以同一截图中的元素定位该主张，必须返回 needs_verification。包年/年付优惠只有在采集到的官方页面已证明其存在时才可检查披露位置；不能从未出现的文字推断优惠未展示。动画等待时长需要时间或交互轨迹证据，静态页面文本与截图不足以判定。其他情况返回 pass 或 needs_verification。不得根据品牌、视觉偏好或无证据推断。所有文字使用简体中文。"
 
     @staticmethod
     def _schema(spec_ids: list[str]) -> dict:
         display = {"type": "object", "additionalProperties": False, "required": ["target_id", "content", "element_refs"], "properties": {"target_id": {"type": "string"}, "content": {"type": "string"}, "element_refs": {"type": "array", "items": {"type": "string"}}}}
-        result = {"type": "object", "additionalProperties": False, "required": ["check_spec_id", "status", "issue_description", "confidence"], "properties": {"check_spec_id": {"type": "string", "enum": spec_ids}, "status": {"type": "string", "enum": ["pass", "fail", "needs_verification"]}, "issue_description": {"type": "string"}, "evidence": {"type": "array", "items": {"type": "string"}}, "recommendation": {"type": "string"}, "confidence": {"type": "number", "minimum": 0, "maximum": 1}, "subject_display": display, "reference_displays": {"type": "array", "items": display}}}
+        result = {"type": "object", "additionalProperties": False, "required": ["check_spec_id", "status", "issue_description", "evidence", "recommendation", "confidence", "subject_display", "reference_displays"], "properties": {"check_spec_id": {"type": "string", "enum": spec_ids}, "status": {"type": "string", "enum": ["pass", "fail", "needs_verification"]}, "issue_description": {"type": "string"}, "evidence": {"type": "array", "items": {"type": "string"}}, "recommendation": {"type": "string"}, "confidence": {"type": "number", "minimum": 0, "maximum": 1}, "subject_display": display, "reference_displays": {"type": "array", "items": display}}}
         return {"type": "object", "additionalProperties": False, "required": ["results"], "properties": {"results": {"type": "array", "minItems": len(spec_ids), "maxItems": len(spec_ids), "items": result}}}
 
     def _result(self, spec, raw: dict | None, evidence: ComparisonEvidenceBundle) -> tuple[CheckRun, ComparisonFindingDetail | None]:
@@ -320,7 +485,26 @@ class ComparisonCheckExecutor:
         if page is None:
             return None
         raw = raw or {}
-        return ComparisonDisplayEvidence(target_id=page.target_id, product=page.product, content=str(raw.get("content") or ""), element_refs=[str(item) for item in raw.get("element_refs", [])])
+        refs = [str(item) for item in raw.get("element_refs", [])]
+        by_ref = {str(item.get("element_ref")): item for item in page.elements}
+        located = [by_ref.get(ref) for ref in refs]
+        # A finding cannot be reportable if any quoted item is absent. Keeping
+        # an empty reference list makes the existing fail gate downgrade it.
+        if not refs or any(item is None for item in located):
+            return ComparisonDisplayEvidence(
+                target_id=page.target_id, product=page.product, content="", element_refs=[]
+            )
+        quotes = [str(item.get("text") or item.get("href") or "").strip() for item in located]
+        if not all(quotes):
+            return ComparisonDisplayEvidence(
+                target_id=page.target_id, product=page.product, content="", element_refs=[]
+            )
+        return ComparisonDisplayEvidence(
+            target_id=page.target_id,
+            product=page.product,
+            content="；".join(f"[{index}] {quote}" for index, quote in enumerate(quotes, start=1)),
+            element_refs=refs,
+        )
 
     @staticmethod
     def _locations(page: ComparisonPageEvidence, refs: list[str]) -> list[dict]:

@@ -129,20 +129,75 @@ class HuaweiCloudAuthProvider:
                 wait_until="domcontentloaded",
                 timeout=self.timeout_ms,
             )
-            await self._open_password_form(page)
-            if not await self._fill_credentials(page):
-                return self._anonymous(AuthStatus.FAILED, "login_form_not_supported")
-            await self._submit(page)
-            status, reason = await self._wait_for_result(page)
-            if status != AuthStatus.AUTHENTICATED:
-                return self._anonymous(status, reason)
-            state = await context.storage_state()
-            self._save_state(state)
-            return self._authenticated(state, "password")
+            return await self.continue_password_login(page)
         except TimeoutError:
             return self._anonymous(AuthStatus.FAILED, "login_timeout")
         finally:
             await context.close()
+
+    async def continue_password_login(self, page: Page, *, persist: bool = True) -> BrowserAuthSession:
+        """Submit credentials on the existing login page, preserving its service redirect."""
+        if not self._is_login_url(page.url):
+            return self._anonymous(AuthStatus.FAILED, "unsupported_login_origin")
+        if not self.enabled or not self.username or not self.password:
+            return self._anonymous(AuthStatus.FAILED, "credentials_missing_in_account_config")
+        local_security_service_failed = False
+
+        def remember_local_security_service_failure(request) -> None:
+            nonlocal local_security_service_failed
+            # Huawei's account-risk component asks this loopback service for
+            # device-verification information.  A refused connection is not a
+            # page resource failure and must never be bypassed by automation.
+            if request.url.startswith(("https://127.0.0.1:46681/", "http://127.0.0.1:46681/")):
+                local_security_service_failed = True
+
+        page.on("requestfailed", remember_local_security_service_failure)
+        try:
+            if await self.requires_challenge(page):
+                return self._anonymous(AuthStatus.CHALLENGE_REQUIRED, "captcha_or_mfa_required")
+            await self._open_password_form(page)
+            if await self.requires_challenge(page):
+                return self._anonymous(AuthStatus.CHALLENGE_REQUIRED, "captcha_or_mfa_required")
+            if not self._is_login_url(page.url):
+                return self._anonymous(AuthStatus.FAILED, "unsupported_login_origin")
+            if not await self._fill_credentials(page):
+                return self._anonymous(AuthStatus.FAILED, "login_form_not_supported")
+            await self._submit(page)
+            status, reason = await self._wait_for_result(page, stop_on_challenge=True)
+            if status == AuthStatus.FAILED and reason == "login_result_timeout" and local_security_service_failed:
+                return self._anonymous(
+                    AuthStatus.FAILED, "local_security_service_unavailable"
+                )
+            if status != AuthStatus.AUTHENTICATED:
+                return self._anonymous(status, reason)
+            state = await page.context.storage_state()
+            if persist:
+                self._save_state(state)
+            return self._authenticated(state, "password")
+        except TimeoutError:
+            return self._anonymous(AuthStatus.FAILED, "login_timeout")
+
+    @staticmethod
+    async def requires_challenge(page: Page) -> bool:
+        text = (await page.locator('body').inner_text(timeout=5_000)).lower()
+        title = (await page.title()).lower()
+        # A "验证码登录" alternative tab is not itself an active challenge.
+        if any(marker in title for marker in ('security verification', '安全验证', '身份验证')):
+            return True
+        if any(marker in text for marker in (
+            '请完成安全验证', '请拖动滑块', '拖动滑块完成', '请输入短信验证码',
+            '请输入手机验证码', '请输入动态验证码', '验证码已发送',
+            'verify you are human', 'verify your identity', 'complete the captcha',
+            'enter the verification code', 'enter the code sent',
+        )):
+            return True
+        controls = page.locator(
+            'input[autocomplete="one-time-code"]:visible, '
+            'input[name*="captcha" i]:visible, input[name*="smscode" i]:visible, '
+            'input[placeholder*="验证码"]:visible, '
+            'iframe[src*="captcha" i]:visible, [class*="captcha-slider" i]:visible'
+        )
+        return await controls.count() > 0
 
     async def _open_password_form(self, page: Page) -> None:
         # The tab is visible before Huawei's SPA attaches its click handler.
@@ -193,6 +248,11 @@ class HuaweiCloudAuthProvider:
             return False
         await visible_username.fill(self.username or "")
         await visible_password.fill(self.password or "")
+        # Huawei's current Vue form enables its submit handler during the
+        # password field's blur validation.  A real mouse click blurs first;
+        # make that state transition explicit for the isolated browser too.
+        await visible_password.press("Tab")
+        await page.wait_for_timeout(150)
         return True
 
     @staticmethod
@@ -204,7 +264,14 @@ class HuaweiCloudAuthProvider:
         return None
 
     async def _submit(self, page: Page) -> None:
+        # The current Huawei account form is a Vue widget whose active
+        # password-submit control is a ``div`` rather than a native button.
+        # Its visible text is duplicated by a hidden IAM form, so selecting by
+        # text first can click an inert element and leave the login waiting
+        # until timeout.  Prefer the widget's stable telemetry hook.
         for selector in (
+            '[ht="click_pwdlogin_submitLogin"]',
+            '.hwid-pwdlogin-root .normalBtn:not(.hwid-disabled)',
             'button[type="submit"]',
             'input[type="submit"]',
             "#btn_submit",
@@ -222,27 +289,16 @@ class HuaweiCloudAuthProvider:
                 return
         await page.keyboard.press("Enter")
 
-    async def _wait_for_result(self, page: Page) -> tuple[AuthStatus, str]:
+    async def _wait_for_result(self, page: Page, *, stop_on_challenge: bool = False) -> tuple[AuthStatus, str]:
         deadline = time.monotonic() + self.timeout_ms / 1000
         while time.monotonic() < deadline:
+            if (stop_on_challenge or not self.interactive) and await self.requires_challenge(page):
+                return AuthStatus.CHALLENGE_REQUIRED, "captcha_or_mfa_required"
             if not self._is_login_url(page.url) and self._has_huawei_cookie(
                 await page.context.cookies()
             ):
                 return AuthStatus.AUTHENTICATED, "password_login_succeeded"
             text = (await page.locator("body").inner_text(timeout=5_000)).lower()
-            if not self.interactive and any(
-                marker in text
-                for marker in (
-                    "captcha",
-                    "security verification",
-                    "verify your identity",
-                    "verification code",
-                    "滑动验证",
-                    "安全验证",
-                    "验证码",
-                )
-            ):
-                return AuthStatus.CHALLENGE_REQUIRED, "captcha_or_mfa_required"
             if any(
                 marker in text
                 for marker in (
@@ -265,8 +321,9 @@ class HuaweiCloudAuthProvider:
 
     @staticmethod
     def _is_login_url(url: str) -> bool:
-        lowered = url.lower()
-        return "auth.huaweicloud.com" in lowered and "login" in lowered
+        parsed = urlparse(url)
+        return (parsed.scheme == 'https' and parsed.hostname == 'auth.huaweicloud.com'
+                and 'login' in parsed.path.lower())
 
     @staticmethod
     def _has_huawei_cookie(cookies: list[dict]) -> bool:

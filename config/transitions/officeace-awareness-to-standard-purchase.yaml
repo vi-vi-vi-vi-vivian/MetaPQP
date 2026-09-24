@@ -1,0 +1,18 @@
+id: officeace-awareness-to-standard-purchase
+version: 1.0.0
+title: 从 OfficeAce 感知页进入个人标准版购买页
+from: officeace-awareness
+to: officeace-purchase-standard
+action:
+  type: click
+  target:
+    role: button
+    name: 立即购买
+    exact: true
+    occurrence: 0
+end_condition:
+  page_map_node: officeace-purchase-standard
+  url_contains: officeace.personal.package.standard
+risk_level: confirmation_only
+safe_stop: purchase_page_loaded
+auto_run: false

@@ -1,0 +1,14 @@
+id: page-title-identity-consistency
+version: 1.0.0
+title: 浏览器页面标题应与当前页面主题一致
+description: 检查浏览器 Title 是否能够识别当前页面实际展示的产品、服务或任务；当 Title 仅为共享门户或控制台名称，且与可见主体内容不一致时报告问题。
+tags: [baseline, accessibility, consistency, discoverability]
+applies_when: {}
+required_evidence: [title, visible_text, evidence_elements]
+executor: {type: model_skill, capability_id: page-title-identity-consistency}
+default_severity: p2
+standard_refs:
+  - criterion_id: metapqp-internal/page-title-identity-consistency
+    relation: implements
+  - criterion_id: wcag-2.2/2.4.2
+    relation: implements

@@ -1,0 +1,7 @@
+id: page-title-identity-consistency
+version: 1.0.0
+kind: skill
+modality: text
+supported_scopes: [page]
+required_evidence: [title, visible_text, evidence_elements]
+implementation: {skill_id: page-title-identity-consistency}

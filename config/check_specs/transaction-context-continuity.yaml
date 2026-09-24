@@ -4,7 +4,7 @@ title: 跳转前后产品上下文应保持连续
 description: 终点页面应保留与起点一致的产品或业务对象上下文，不应进入无关产品页面。
 scope: transition
 tags: [journey, transition, transaction]
-applies_when: {}
+applies_when: {origins: [journey]}
 required_evidence: [transition_trace, start_snapshot, end_snapshot]
 executor: {type: deterministic, capability_id: transaction-context-continuity-checker}
 default_severity: p1

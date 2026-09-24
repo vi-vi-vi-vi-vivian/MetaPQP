@@ -87,7 +87,12 @@ class ComparisonAuditRunner:
             (f"本产品元素：{len(evidence.subject.elements)} 个", f"参考页面：{len(evidence.references)} 个"),
         )
         check_started_at = progress.stage_start("4/5 按六项体验检查进行比较", "正在寻找可迁移的体验改进机会……")
-        plan = self.plan_builder.build(request.audit_profile, profile.dimensions, evidence)
+        plan = self.plan_builder.build(
+            request.audit_profile,
+            profile,
+            evidence,
+            request.execution_strategy,
+        )
         check_runs, details, model_calls = await self.executor.execute(plan, evidence)
         assessment = self.assessment_builder.build(check_runs, details, model_calls)
         progress.stage_complete(
@@ -95,6 +100,8 @@ class ComparisonAuditRunner:
             (
                 f"已检查：{len(check_runs)} 条 · 可改进：{sum(item.status.value == 'fail' for item in check_runs)} 条",
                 f"通过：{sum(item.status.value == 'pass' for item in check_runs)} 条",
+                f"模型批次：{len(plan.execution_batches)} 个 · "
+                + "、".join(item.batch_id for item in plan.execution_batches),
             ),
         )
         result = ComparisonResult(job_id=job_id, request=request, comparison_profile=profile, subject_capture=subject, reference_captures=references, comparison_evidence=evidence, comparison_check_plan=plan, assessment=assessment)

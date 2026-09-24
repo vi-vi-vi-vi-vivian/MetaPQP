@@ -1,0 +1,84 @@
+id: ai-product-prepayment-journeys
+version: 1.0.0
+title: 华为云 AI 产品支付前 Journey
+description: 从感知页进入购买流程，在出现支付 CTA 前停止；当前仅列出已经登记并可运行的旅程。
+items:
+  - id: officeace-advanced-purchase-preview
+    title: OfficeAce 个人高级版：感知至购买页
+    scope: journey
+    description: 从 OfficeAce 感知页的个人高级版“立即购买”进入购买配置页；在任何订单或支付动作前停止。订单确认节点待补齐后将扩展为完整支付前 Journey。
+    journey_id: officeace-awareness-advanced-purchase-preview
+    device: desktop
+    locale: zh-CN
+    auth_mode: required
+    audit_profile: mvp
+
+  - id: officeace-standard-purchase-preview
+    title: OfficeAce 个人标准版：感知至购买页
+    scope: journey
+    description: 从 OfficeAce 个人标准版“立即购买”进入对应 SKU 的购买配置页；在任何订单或支付动作前停止。
+    journey_id: officeace-awareness-standard-purchase-preview
+    device: desktop
+    locale: zh-CN
+    auth_mode: required
+    audit_profile: mvp
+
+  - id: officeace-premium-purchase-preview
+    title: OfficeAce 个人旗舰版：感知至购买页
+    scope: journey
+    description: 从 OfficeAce 个人旗舰版“立即购买”进入对应 SKU 的购买配置页；在任何订单或支付动作前停止。
+    journey_id: officeace-awareness-premium-purchase-preview
+    device: desktop
+    locale: zh-CN
+    auth_mode: required
+    audit_profile: mvp
+
+  - id: tokenplan-purchase-preview
+    title: Token Plan：感知至购买页
+    scope: journey
+    description: 从 Token Plan 感知页的“立即订阅”进入资源计划购买入口；在任何订单或支付动作前停止。管理及订单确认节点待补齐后将扩展为完整支付前 Journey。
+    journey_id: tokenplan-awareness-purchase-preview
+    device: desktop
+    locale: zh-CN
+    auth_mode: required
+    audit_profile: mvp
+
+  - id: codearts-advanced-subscription-preview
+    title: CodeArts 个人高级版：感知至订阅页
+    scope: journey
+    description: 从 CodeArts 感知页的个人高级版“立即订阅”进入订阅页；在任何订单或支付动作前停止。订单确认节点待补齐后将扩展为完整支付前 Journey。
+    journey_id: codearts-awareness-advanced-subscription-preview
+    device: desktop
+    locale: zh-CN
+    auth_mode: required
+    audit_profile: mvp
+
+  - id: codearts-standard-subscription-preview
+    title: CodeArts 个人标准版：感知至订阅页
+    scope: journey
+    description: 点击个人标准版“立即订阅”后检查订阅页；当前入口 URL 不携带套餐参数，因此重点核验终点是否明确回显标准版选择。
+    journey_id: codearts-awareness-standard-subscription-preview
+    device: desktop
+    locale: zh-CN
+    auth_mode: required
+    audit_profile: mvp
+
+  - id: codearts-premium-subscription-preview
+    title: CodeArts 个人旗舰版：感知至订阅页
+    scope: journey
+    description: 点击个人旗舰版“立即订阅”后检查订阅页；当前入口 URL 不携带套餐参数，因此重点核验终点是否明确回显旗舰版选择。
+    journey_id: codearts-awareness-premium-subscription-preview
+    device: desktop
+    locale: zh-CN
+    auth_mode: required
+    audit_profile: mvp
+
+  - id: agentarts-console-trial-preview
+    title: AgentArts：感知至免费体验控制台
+    scope: journey
+    description: 从 AgentArts 感知页进入免费体验控制台。当前公开页未提供可验证的付费购买入口，因此此项不属于支付前购买 Journey。
+    journey_id: agentarts-awareness-console-trial-preview
+    device: desktop
+    locale: zh-CN
+    auth_mode: required
+    audit_profile: mvp

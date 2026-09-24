@@ -1,0 +1,13 @@
+id: interaction-feedback-visibility
+version: 1.0.0
+title: 点击后应提供可观察的反馈
+description: 可安全执行的页面交互后，应出现页面跳转、内容变化或明确反馈。
+scope: transition
+tags: [interaction, transition, feedback]
+applies_when: {origins: [page, journey]}
+required_evidence: [transition_trace, start_snapshot, end_snapshot]
+executor: {type: deterministic, capability_id: interaction-feedback-visibility-checker}
+default_severity: p1
+standard_refs:
+  - criterion_id: nielsen-heuristics/H1
+    relation: supports

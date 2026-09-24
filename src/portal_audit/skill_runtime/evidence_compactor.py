@@ -46,10 +46,11 @@ class EvidenceContractValidator:
 
 
 class ModelEvidenceCompactor:
-    """Project a complete snapshot without silently truncating semantic evidence.
+    """Project complete, locatable page evidence with no browser-shell noise.
 
-    The historical class name is retained for API compatibility. Compression here
-    means removing browser-only fields, never taking a prefix of page evidence.
+    Raw browser evidence remains in the snapshot artifacts.  This projection is
+    deliberately smaller: it excludes shared page chrome, removes null/default
+    metadata, and keeps the real ``element_ref`` for every remaining item.
     """
 
     version = "2.0.0"
@@ -69,17 +70,39 @@ class ModelEvidenceCompactor:
             for item in snapshot.interactive_elements
             if item.element_ref is not None
         }
+        content_items = [
+            item
+            for item in snapshot.evidence_elements
+            if item.page_region not in {"header", "footer", "navigation"}
+        ]
+        duplicate_interactive_text = {
+            item.text.strip()
+            for item in content_items
+            if item.element_ref in interactive_refs and item.text.strip()
+            and sum(
+                other.element_ref in interactive_refs
+                and other.text.strip() == item.text.strip()
+                for other in content_items
+            ) > 1
+        }
         elements = []
         included_refs: set[str] = set()
-        for order, item in enumerate(snapshot.evidence_elements, start=1):
+        for item in content_items:
+            # Empty structural wrappers cannot support a text, CTA, pricing, or
+            # terminology finding.  Images and controls remain locatable even
+            # when they do not have visible text.
+            is_interactive = item.element_ref in interactive_refs
+            if not item.text.strip() and item.tag != "img" and not is_interactive:
+                continue
             included_refs.add(item.element_ref)
             element = {
                 "element_ref": item.element_ref,
-                "order": order,
-                "tag": item.tag,
                 "text": item.text,
-                "interactive": item.element_ref in interactive_refs,
             }
+            if is_interactive:
+                element["interactive"] = True
+            if item.tag in {"img", "a", "button", "input", "select", "textarea", "summary"}:
+                element["tag"] = item.tag
             if item.tag == "img":
                 element.update(
                     {
@@ -90,46 +113,49 @@ class ModelEvidenceCompactor:
                     }
                 )
             if profile in {"transaction_evidence", "visual"}:
-                element.update(
-                    {
-                        "role": item.role,
-                        "href": item.href,
-                        "accessible_name": item.accessible_name,
-                        "enabled": item.enabled,
-                    }
-                )
-            if profile == "transaction_evidence" and (
-                item.element_ref in interactive_refs or item.interactive_ancestor
+                if item.role:
+                    element["role"] = item.role
+                if item.href:
+                    element["href"] = item.href
+                if item.accessible_name and item.accessible_name != item.text:
+                    element["accessible_name"] = item.accessible_name
+                if not item.enabled:
+                    element["enabled"] = False
+            if (
+                profile == "transaction_evidence"
+                and is_interactive
+                and item.text.strip() in duplicate_interactive_text
+                and item.surrounding_text.strip()
             ):
-                element.update(
-                    {
-                        "interactive_ancestor": item.interactive_ancestor,
-                    }
-                )
+                # Duplicate CTA labels are otherwise impossible to distinguish.
+                # A short nearby context is enough; the complete raw context is
+                # preserved only in the local snapshot artifact.
+                element["context"] = item.surrounding_text.strip()[:240]
             elements.append(element)
 
-        next_order = len(elements) + 1
         for item in snapshot.interactive_elements:
-            if item.element_ref is None or item.element_ref in included_refs:
+            if (
+                item.element_ref is None
+                or item.element_ref in included_refs
+                or item.page_region in {"header", "footer", "navigation"}
+            ):
                 continue
             elements.append(
                 {
                     "element_ref": item.element_ref,
-                    "order": next_order,
-                    "tag": item.tag,
-                    "role": item.role,
                     "text": item.text,
-                    "href": item.href,
-                    "alt": None,
-                    "has_alt": None,
-                    "accessible_name": "",
-                    "surrounding_text": "",
-                    "interactive_ancestor": False,
-                    "enabled": item.enabled,
                     "interactive": True,
                 }
             )
-            next_order += 1
+            if item.tag in {"a", "button", "input", "select", "textarea", "summary"}:
+                elements[-1]["tag"] = item.tag
+            if profile in {"transaction_evidence", "visual"}:
+                if item.role:
+                    elements[-1]["role"] = item.role
+                if item.href:
+                    elements[-1]["href"] = item.href
+                if not item.enabled:
+                    elements[-1]["enabled"] = False
 
         capabilities = {
             "title",
@@ -164,9 +190,9 @@ class ModelEvidenceCompactor:
                 "included_counts": {
                     "body_chars": len(snapshot.body_text),
                     "headings": len(snapshot.headings),
-                    "evidence_elements": len(snapshot.evidence_elements),
-                    "interactive_elements": len(interactive_refs),
-                    "images": sum(1 for item in snapshot.evidence_elements if item.tag == "img"),
+                    "evidence_elements": len(elements),
+                    "interactive_elements": sum(1 for item in elements if item.get("interactive")),
+                    "images": sum(1 for item in elements if item.get("tag") == "img"),
                 },
             },
         }

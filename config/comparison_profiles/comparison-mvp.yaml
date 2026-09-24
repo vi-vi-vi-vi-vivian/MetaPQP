@@ -2,19 +2,28 @@ id: comparison-mvp
 version: 1.0.0
 title: 参考产品体验改进机会识别
 dimensions: [outcome_visibility, zero_cost_access, option_discernibility, decision_info_proximity, state_continuity, commitment_boundary]
+execution:
+  # One reference page can be assessed in one request. Larger comparisons are routed
+  # by decision group once their estimated all-page input would be too large.
+  strategy: auto
+  all_references_max: 1
+  all_references_max_estimated_tokens: 30000
 coverage_groups:
   - id: value-discovery
     title: 认识价值
     description: 用户能否快速理解产品带来的结果，并在决策前接触核心价值。
     check_spec_ids: [reference-outcome-visibility, reference-zero-cost-access]
+    evidence_region_kinds: [hero, outcome_visibility, zero_cost_access]
   - id: decision-making
     title: 评估并选择
     description: 用户能否看懂方案差异，并在作出选择前获得必要信息。
     check_spec_ids: [reference-option-discernibility, reference-decision-information-proximity]
+    evidence_region_kinds: [offer_selection]
   - id: commitment-and-use
     title: 确认并开始使用
     description: 用户能否在承诺前了解限制，并在后续步骤中保留已有选择。
     check_spec_ids: [reference-commitment-boundary, reference-state-continuity]
+    evidence_region_kinds: [commitment_boundary, state_continuity]
 not_covered:
   - 完整任务步骤效率与操作响应
   - 受阻场景的引导与恢复

@@ -10,7 +10,16 @@ from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 from playwright.async_api import async_playwright
 
 from portal_audit.adapters.artifacts.local_store import LocalArtifactStore
+from portal_audit.adapters.browser.content_scope import (
+    primary_content_root,
+    projected_content_text,
+)
 from portal_audit.adapters.browser.launcher import launch_chromium
+from portal_audit.adapters.browser.playwright_browser import (
+    _capture_page_segments,
+    _probe_disclosed_links,
+    collect_disclosed_links,
+)
 from portal_audit.application.ports.auth import BrowserAuthSession
 from portal_audit.application.ports.journey_browser import JourneyBrowserRun, JourneyBrowserStep
 from portal_audit.application.services.page_map_resolver import PageMapNodeResolver
@@ -88,7 +97,7 @@ ELEMENT_SCRIPT = r"""els => {
   }).filter(item => item.visible);
 }"""
 
-TEXT_EVIDENCE_SCRIPT = r"""() => {
+TEXT_EVIDENCE_SCRIPT = r"""root => {
   const collected = [];
   const visit = root => {
     for (const element of root.querySelectorAll('*')) {
@@ -139,7 +148,7 @@ TEXT_EVIDENCE_SCRIPT = r"""() => {
       if (element.shadowRoot) visit(element.shadowRoot);
     }
   };
-  visit(document);
+  visit(root);
   return collected.map((item, index) => ({
     ...item, element_ref: `text-${index + 1}`
   }));
@@ -369,6 +378,8 @@ class PlaywrightJourneySession:
                         end_snapshot_id=end_snapshot.snapshot_id,
                         start_url=current_snapshot.final_url,
                         end_url=end_snapshot.final_url,
+                        expected_entry_url=step.end_node.entry_url,
+                        expected_url_contains=transition.end_condition.url_contains,
                         redirect_chain=list(
                             dict.fromkeys(redirect_chain[redirect_start:])
                         ),
@@ -474,7 +485,10 @@ class PlaywrightJourneySession:
         auth_session: BrowserAuthSession,
     ) -> PageSnapshot:
         title = await page.title()
-        body_text = await page.locator("body").inner_text(timeout=self.timeout_ms)
+        content_root = await primary_content_root(page, target.page_surface)
+        body_text = await projected_content_text(
+            content_root, target.page_surface, timeout_ms=self.timeout_ms
+        )
         html = await page.content()
         if http_status is None:
             try:
@@ -491,11 +505,11 @@ class PlaywrightJourneySession:
                         "error": f"document status probe failed: {type(error).__name__}",
                     }
                 )
-        elements = await page.locator(
+        elements = await content_root.locator(
             "h1, h2, h3, h4, h5, h6, p, li, dt, dd, label, a, button, input, "
             "select, textarea, img, [role=button], [role=tab], [role=alert]"
         ).evaluate_all(ELEMENT_SCRIPT)
-        text_elements = await page.evaluate(TEXT_EVIDENCE_SCRIPT)
+        text_elements = await content_root.evaluate(TEXT_EVIDENCE_SCRIPT)
         existing = {
             (
                 item.get("text"),
@@ -550,6 +564,48 @@ class PlaywrightJourneySession:
             for item in elements
             if item["interactive"]
         ]
+        document_size = await page.evaluate(
+            """() => ({width: Math.max(document.documentElement.scrollWidth,
+              document.body.scrollWidth), height: Math.max(document.documentElement.scrollHeight,
+              document.body.scrollHeight)})"""
+        )
+        run_dir = self.store.run_dir(run_id)
+        screenshot = run_dir / "screenshots" / "page-full.png"
+        screenshot.parent.mkdir(parents=True, exist_ok=True)
+        await page.screenshot(path=str(screenshot), full_page=True)
+        segment_artifacts = await _capture_page_segments(
+            page, run_dir / "screenshots", {"width": 1440, "height": 1000}, document_size
+        )
+        disclosure_artifacts: list[ArtifactRef] = []
+
+        async def capture_disclosure(label: str) -> None:
+            path = run_dir / "screenshots" / f"information-disclosure-{len(disclosure_artifacts) + 1}.png"
+            await page.screenshot(path=str(path), full_page=False)
+            disclosure_artifacts.append(
+                ArtifactRef(
+                    kind="interaction_screenshot", path=str(path), media_type="image/png",
+                    metadata={"state": "information_disclosure", "label": label},
+                )
+            )
+
+        disclosed = await collect_disclosed_links(
+            page, final_url, on_disclosure_opened=capture_disclosure
+        )
+        link_probe_results = await _probe_disclosed_links(page, disclosed)
+        interactive.extend(disclosed)
+        evidence.extend(
+            EvidenceElement(
+                element_ref=f"disclosed-{index}",
+                tag="a",
+                text=item.text,
+                href=item.href,
+                selector=item.selector,
+                bounds=item.bounds,
+                accessible_name=item.text,
+                interactive_ancestor=True,
+            )
+            for index, item in enumerate(disclosed, start=1)
+        )
         headings = [
             {
                 "level": int(item["tag"][1:]),
@@ -561,15 +617,6 @@ class PlaywrightJourneySession:
             for item in elements
             if item["tag"] in {"h1", "h2", "h3", "h4", "h5", "h6"}
         ]
-        document_size = await page.evaluate(
-            """() => ({width: Math.max(document.documentElement.scrollWidth,
-              document.body.scrollWidth), height: Math.max(document.documentElement.scrollHeight,
-              document.body.scrollHeight)})"""
-        )
-        run_dir = self.store.run_dir(run_id)
-        screenshot = run_dir / "screenshots" / "page-full.png"
-        screenshot.parent.mkdir(parents=True, exist_ok=True)
-        await page.screenshot(path=str(screenshot), full_page=True)
         artifacts = [
             self.store.write_text(run_id, "artifacts/page.html", html, "text/html"),
             self.store.write_text(run_id, "artifacts/body.txt", body_text, "text/plain"),
@@ -580,6 +627,16 @@ class PlaywrightJourneySession:
             ),
             self.store.write_json(
                 run_id,
+                "artifacts/disclosed-links.json",
+                [item.model_dump(mode="json") for item in disclosed],
+            ),
+            self.store.write_json(
+                run_id,
+                "artifacts/link-probes.json",
+                link_probe_results,
+            ),
+            self.store.write_json(
+                run_id,
                 "artifacts/evidence-elements.json",
                 [item.model_dump(mode="json") for item in evidence],
             ),
@@ -587,6 +644,8 @@ class PlaywrightJourneySession:
             self.store.write_json(run_id, "artifacts/network.json", network_errors),
             ArtifactRef(kind="screenshot", path=str(screenshot), media_type="image/png"),
         ]
+        artifacts.extend(segment_artifacts)
+        artifacts.extend(disclosure_artifacts)
         return PageSnapshot(
             page_id=target.page_id,
             requested_url=target.url,
@@ -598,6 +657,7 @@ class PlaywrightJourneySession:
             body_text=body_text,
             headings=headings,
             interactive_elements=interactive,
+            link_probe_results=link_probe_results,
             evidence_elements=evidence,
             console_errors=console_errors,
             network_errors=network_errors,

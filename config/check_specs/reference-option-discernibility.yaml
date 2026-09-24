@@ -1,7 +1,7 @@
 id: reference-option-discernibility
-version: 1.0.0
+version: 1.1.0
 title: 方案选择是否清晰
-description: 检查同一决策场景中的方案、套餐或版本是否可借鉴参考页面的量化差异与选择引导。
+description: 仅在同一选择区存在两个及以上可选方案、套餐或版本时检查。参考页面须以至少一个能解释价差的统一、可比较维度区分选项（如包含额度、计量方式、并发/速率、适用模型或超额处理）；主体只有价格或定性人群标签且无法判断权益差异时才可判为缺口。不同商业模式、不同产品对象或单一方案不得直接比较。
 scope: comparison
 tags: [comparison, decision]
 applies_when: {dimensions: [option_discernibility], page_roles: [awareness, purchase]}

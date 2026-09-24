@@ -1,7 +1,7 @@
 id: reference-zero-cost-access
-version: 1.0.0
+version: 1.1.0
 title: 核心价值是否可先体验
-description: 检查是否可借鉴参考页面在决策前提供试用、预览、示例或其他低门槛体验核心价值的做法。
+description: 仅检查可让用户在购买前实际接触核心能力的入口。参考页面必须提供可定位的免费额度、试用、可操作预览或结果示例；主体没有同等入口时才可判为缺口。“联系我们”、文档链接或与核心能力无关的下载不构成体验。若主体已有公开 Demo、免费额度或等效预览，应通过；产品不具备可试用前提时应待确认而非推断缺失。
 scope: comparison
 tags: [comparison, access]
 applies_when: {dimensions: [zero_cost_access], page_roles: [awareness, purchase]}

@@ -1,7 +1,7 @@
 id: reference-state-continuity
-version: 1.0.0
+version: 1.1.0
 title: 用户选择是否连续保留
-description: 检查可观察到的多步骤或跨页上下文中，是否可借鉴参考页面保留并回显用户已作选择的做法。
+description: 仅在同一次检查实际采集到至少两步操作、选择动作及后续页面回显证据时检查。参考流程必须能证明已选套餐、模型或配置在下一步被保留或回显，主体在同类流程中丢失或要求重选时才可判为缺口。单页静态对比不具备判定条件，应不适用或待确认，不得输出泛泛的连续性建议。
 scope: comparison
 tags: [comparison, continuity]
 applies_when: {dimensions: [state_continuity], page_roles: [awareness, purchase]}

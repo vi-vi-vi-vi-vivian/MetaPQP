@@ -1,0 +1,9 @@
+id: codearts-awareness-advanced-subscription-preview
+version: 1.0.0
+title: CodeArts 个人高级版感知到订阅页
+goal: 验证用户从 CodeArts 个人高级版套餐入口进入正确的订阅页，并在任何订单或支付动作前停止。
+execution_mode: sequential
+start: codearts-awareness
+transitions:
+  - codearts-awareness-to-advanced-subscription
+safety_profile: production-readonly

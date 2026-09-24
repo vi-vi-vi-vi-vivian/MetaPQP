@@ -1,0 +1,18 @@
+id: codearts-awareness-to-standard-subscription
+version: 1.0.0
+title: 从 CodeArts 感知页进入个人标准版订阅页
+from: codearts-awareness
+to: codearts-subscription
+action:
+  type: click
+  target:
+    role: button
+    name: 立即订阅
+    exact: true
+    occurrence: 0
+end_condition:
+  page_map_node: codearts-subscription
+  url_contains: /portal/settings/subscription
+risk_level: confirmation_only
+safe_stop: subscription_page_loaded
+auto_run: false

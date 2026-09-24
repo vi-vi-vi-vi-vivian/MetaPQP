@@ -1,0 +1,19 @@
+id: agentarts-awareness-to-console-trial
+version: 1.0.0
+title: 从 AgentArts 感知页进入免费体验控制台
+from: agentarts-awareness
+to: agentarts-console-trial
+action:
+  type: click
+  target:
+    role: link
+    name: 免费试用
+    exact: true
+    occurrence: 0
+    href_contains: /agentarts/
+end_condition:
+  page_map_node: agentarts-console-trial
+  url_contains: '#/home/overview'
+risk_level: confirmation_only
+safe_stop: console_trial_page_loaded
+auto_run: false

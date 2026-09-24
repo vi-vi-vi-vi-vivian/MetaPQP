@@ -1,0 +1,9 @@
+id: agentarts-awareness-console-trial-preview
+version: 1.0.0
+title: AgentArts 感知到免费体验控制台
+goal: 验证用户从 AgentArts 感知页的免费体验入口进入正确控制台，并在任何资源创建、购买或支付动作前停止。
+execution_mode: sequential
+start: agentarts-awareness
+transitions:
+  - agentarts-awareness-to-console-trial
+safety_profile: production-readonly

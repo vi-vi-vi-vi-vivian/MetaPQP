@@ -10,6 +10,7 @@ from portal_audit.domain.models import (
     CheckScope,
     ExecutionBatch,
     ExecutionBatchMode,
+    ExecutorType,
     PageSnapshot,
     PlanDecision,
     TransitionTrace,
@@ -24,7 +25,10 @@ class TransitionCheckPlanBuilder:
         self.registry = registry
         self.profiles_root = profiles_root
 
-    def build(self, transition_id: str, profile: str = "mvp") -> CheckPlan:
+    def build(
+        self, transition_id: str, profile: str = "mvp", origin: str = "journey",
+        interaction_kind: str | None = None,
+    ) -> CheckPlan:
         payload = yaml.safe_load(
             (self.profiles_root / f"{profile}.yaml").read_text(encoding="utf-8")
         )
@@ -35,14 +39,18 @@ class TransitionCheckPlanBuilder:
             if spec.scope != CheckScope.TRANSITION:
                 continue
             transition_ids = spec.applies_when.get("transition_ids", [])
-            applicable = spec.id in enabled and (
+            origins = spec.applies_when.get("origins", ["journey"])
+            interaction_kinds = spec.applies_when.get("interaction_kinds", [])
+            applicable = spec.executor.type == ExecutorType.DETERMINISTIC and spec.id in enabled and (
                 not transition_ids or transition_id in transition_ids
+            ) and origin in origins and (
+                not interaction_kinds or interaction_kind in interaction_kinds
             )
             decision = PlanDecision(
                 check_spec_id=spec.id,
                 selected=applicable,
                 reason=(
-                    "transition scope and applies_when matched"
+                    "transition scope, origin and applies_when matched"
                     if applicable
                     else "not enabled or transition_id did not match"
                 ),
@@ -87,6 +95,11 @@ class TransitionCheckExecutor:
         ]
 
     def _execute_one(self, spec, trace, start_snapshot, end_snapshot) -> CheckRun:
+        if end_snapshot.content_ready is False:
+            from portal_audit.capabilities.checkers.transition import TransitionChecker
+            from portal_audit.domain.models import CheckStatus
+            return TransitionChecker.run(spec, CheckStatus.NEEDS_VERIFICATION,
+                                         '目标正文在等待时间内未加载完成，暂不判断该项通过或失败。', trace)
         try:
             checker = self.checkers[spec.executor.capability_id]
         except KeyError as error:

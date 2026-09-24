@@ -1,0 +1,13 @@
+id: price-calculation-consistency
+version: 1.0.0
+title: 配置费用应符合明示计价规则
+description: 根据当前套餐单价、计费单位、购买时长和明示折扣重新计算配置费用；未披露必要因子时待确认。
+scope: transition
+tags: [purchase, pricing, calculation]
+applies_when: {origins: [page], interaction_kinds: [quote_configuration]}
+required_evidence: [transition_trace, start_snapshot, end_snapshot, quote_state]
+executor: {type: deterministic, capability_id: price-calculation-consistency-checker}
+default_severity: p1
+standard_refs:
+  - criterion_id: metapqp-internal/price-calculation-consistency
+    relation: implements

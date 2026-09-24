@@ -3,6 +3,7 @@ version: 1.0.0
 check_specs:
   - page-load
   - document-structure
+  - page-title-identity-consistency
   - runtime-errors
   - broken-links
   - product-value-clarity
@@ -11,8 +12,11 @@ check_specs:
   - terminology-clarity
   - content-internal-consistency
   - pricing-transparency
+  - purchase-selection-state-consistency
+  - price-calculation-consistency
   - commitment-risk-timing
   - image-alt
+  - visible-image-load-failure
   - mobile-horizontal-overflow
   - mobile-tap-target-size
   - visible-content-occlusion
@@ -21,6 +25,9 @@ check_specs:
   - journey-transition-reachability
   - entry-and-resume-continuity
   - transaction-context-continuity
+  - interaction-feedback-visibility
+  - interaction-failure-guidance
+  - transition-intent-result-consistency
   - cross-stage-product-identity-consistency
   - cross-stage-decision-guidance-continuity
   - cross-stage-commercial-terms-consistency

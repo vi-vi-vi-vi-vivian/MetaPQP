@@ -1,7 +1,7 @@
 id: reference-outcome-visibility
-version: 1.0.0
-title: 结果价值是否清晰可见
-description: 检查是否可借鉴参考页面在用户决策前直观展示使用后结果、产出或可理解价值的做法。
+version: 1.1.0
+title: 最终成果是否在决策前可见
+description: 仅比较同属产品认知或购买前的内容。参考页面必须同时可定位地展示典型任务或使用场景，以及用户可理解的最终产出、效果示例或可核验成效；主体仅有能力口号、模型覆盖或泛场景描述时才可判为缺口。不得仅因没有客户案例而判定缺失；已有输入—输出示例、成果演示或可核验指标即视为满足。静态页面证据不能证明动画等待时长，除非提供了可验证的时间或交互轨迹证据。
 scope: comparison
 tags: [comparison, outcome]
 applies_when: {dimensions: [outcome_visibility], page_roles: [awareness, purchase]}

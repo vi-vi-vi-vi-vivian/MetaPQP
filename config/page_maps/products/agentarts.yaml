@@ -1,0 +1,24 @@
+nodes:
+  - id: agentarts-awareness
+    version: 1.0.0
+    title: AgentArts 感知页
+    entry_url: https://www.huaweicloud.com/product/agentarts.html
+    url_patterns:
+      - https://www.huaweicloud.com/product/agentarts.html
+    expected_primary_stage: awareness
+    allowed_stages: [awareness, trial]
+    expected_surface: portal
+    auth_required: false
+    product: agentarts
+
+  - id: agentarts-console-trial
+    version: 1.0.0
+    title: AgentArts 免费体验控制台
+    entry_url: https://console.huaweicloud.com/agentarts/?region=cn-southwest-2#/home/overview
+    url_patterns:
+      - https://console.huaweicloud.com/agentarts/*#/home/overview
+    expected_primary_stage: trial
+    allowed_stages: [trial, usage]
+    expected_surface: console
+    auth_required: true
+    product: agentarts

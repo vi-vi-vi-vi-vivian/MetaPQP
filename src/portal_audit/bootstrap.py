@@ -23,6 +23,8 @@ from portal_audit.application.services.comparison_checks import (
     ComparisonCheckPlanBuilder,
     ComparisonEvidenceBuilder,
 )
+from portal_audit.application.services.interaction_discovery import InteractionDiscovery
+from portal_audit.application.services.interaction_semantics import InteractionSemanticExecutor
 from portal_audit.application.services.journey_checks import (
     JourneyAssessmentBuilder,
     JourneyCheckExecutor,
@@ -166,7 +168,9 @@ def build_auth_provider(
     )
 
 
-def build_page_audit_runner(settings: Settings | None = None) -> OpenJiuwenWorkflowRunner:
+def build_page_audit_runner(
+    settings: Settings | None = None, *, headless: bool | None = None
+) -> OpenJiuwenWorkflowRunner:
     settings = settings or Settings()
     _configure_openjiuwen_logging(settings)
     # Import the workflow only after the SDK logger is configured.  OpenJiuwen
@@ -176,13 +180,14 @@ def build_page_audit_runner(settings: Settings | None = None) -> OpenJiuwenWorkf
 
     progress = ProgressReporter(enabled=settings.progress_logs)
     store = LocalArtifactStore(settings.output_root)
+    auth_provider = build_auth_provider(settings, headless=headless)
     browser = PlaywrightBrowser(
         store,
-        headless=settings.browser_headless,
+        headless=settings.browser_headless if headless is None else headless,
         timeout_ms=settings.browser_timeout_ms,
         visual_audit_enabled=settings.visual_audit_enabled,
+        auth_provider=auth_provider,
     )
-    auth_provider = build_auth_provider(settings)
     model = _build_model(settings, settings.text_model_profile)
     visual_model = _build_model(settings, settings.visual_model_profile)
     standards = StandardsRegistry(settings.config_root / "standards").load()
@@ -232,6 +237,20 @@ def build_page_audit_runner(settings: Settings | None = None) -> OpenJiuwenWorkf
         check_executor=executor,
         assessment_builder=AssessmentBuilder(registry),
         output_writer=output_writer,
+        interaction_discovery=InteractionDiscovery(),
+        transition_plan_builder=TransitionCheckPlanBuilder(
+            registry, settings.config_root / "audit_profiles"
+        ),
+        transition_executor=TransitionCheckExecutor(
+            registry,
+            {
+                item.id: capabilities.create_checker(item.id, settings)
+                for item in capabilities.all()
+                if item.kind.value == "deterministic"
+                and "transition" in [scope.value for scope in item.supported_scopes]
+            },
+        ),
+        interaction_semantic_executor=InteractionSemanticExecutor(registry, model, skill_loader),
         progress=progress,
     )
     repository = SQLiteAuditJobRepository(settings.data_root / "app.db")

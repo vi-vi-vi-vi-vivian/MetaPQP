@@ -1,0 +1,13 @@
+id: interaction-failure-guidance
+version: 1.0.0
+title: 错误页是否提供恢复指引
+description: 仅当点击后明确出现错误页时，检查是否提供返回、重试、帮助或联系支持等处理方式。
+scope: transition
+tags: [interaction, transition, error-guidance]
+applies_when: {origins: [page, journey]}
+required_evidence: [transition_trace, end_snapshot]
+executor: {type: deterministic, capability_id: interaction-failure-guidance-checker}
+default_severity: p1
+standard_refs:
+  - criterion_id: nielsen-heuristics/H9
+    relation: supports

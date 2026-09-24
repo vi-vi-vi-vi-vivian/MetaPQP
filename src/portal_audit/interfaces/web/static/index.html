@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MetaPQP 控制台</title>
+    <link rel="stylesheet" href="/assets/app.css" />
+  </head>
+  <body>
+    <aside class="sidebar">
+      <a class="brand" href="#scenarios"><span class="brand-mark">M</span><span>MetaPQP<small>体验检查控制台</small></span></a>
+      <nav>
+        <a href="#scenarios" class="active">检查场景</a>
+        <a href="#specs">检查规则</a>
+        <a href="#runs">运行记录</a>
+      </nav>
+      <div class="side-note">本地运行<br /><span>配置写入项目目录</span></div>
+    </aside>
+    <main>
+      <header class="masthead">
+        <div><p class="eyebrow">Experience audit workbench</p><h1>把检查变成可管理的工作流</h1></div>
+        <p class="header-copy">新增场景、调整规则，随后从同一处启动检查并打开报告。</p>
+      </header>
+
+      <section id="scenarios" class="workspace-section">
+        <div class="section-heading"><div><p class="eyebrow">01 / 场景</p><h2>检查清单</h2><p>每条场景是一份可复用的运行配置。</p></div><button class="button primary" id="new-checklist">新建清单</button></div>
+        <div class="checklist-toolbar"><label>当前清单<select id="checklist-select"></select></label><span id="checklist-description"></span></div>
+        <div id="scenario-list" class="scenario-list"></div>
+        <details class="form-panel" open>
+          <summary>新增检查场景 <span>选择检查范围后填写页面信息</span></summary>
+          <form id="scenario-form" class="scenario-form">
+            <label>场景 ID<input id="scenario-id" required placeholder="例如 token-plan-market" pattern="[a-z0-9][a-z0-9-]*" /></label>
+            <label>场景名称<input id="scenario-title" required placeholder="例如 Token Plan 对比" /></label>
+            <label class="span-2">说明<input id="scenario-description" placeholder="这次检查想回答什么问题？" /></label>
+            <label>检查范围<select id="scenario-scope"><option value="page">单页面检查</option><option value="comparison">参考产品对比</option><option value="journey">用户旅程检查</option></select></label>
+            <label>页面类型<select id="scenario-surface"><option value="portal">门户公开页</option><option value="console">控制台</option></select></label>
+            <label>设备<select id="scenario-device"><option value="desktop">Desktop</option><option value="mobile">Mobile</option></select></label>
+            <label>语言<select id="scenario-locale"><option value="zh-CN">中文</option><option value="en-US">English</option></select></label>
+            <label>认证<select id="scenario-auth"><option value="off">不登录</option><option value="auto">自动判断</option><option value="required">要求登录</option></select></label>
+            <label id="journey-field" hidden>Journey ID<input id="scenario-journey" placeholder="选择已登记的 journey" /></label>
+            <label id="target-url-field" class="span-2">主体页面 URL<input id="scenario-url" type="url" placeholder="https://…" /></label>
+            <label id="target-product-field">产品名称<input id="scenario-product" placeholder="报告中显示的产品名" /></label>
+            <label id="references-field" class="span-2" hidden>参考页面（每行：产品名 | URL）<textarea id="scenario-references" rows="4" placeholder="阿里云百炼 | https://www.aliyun.com/product/bailian"></textarea></label>
+            <label id="comparison-strategy-field" hidden>对比编排策略<small>默认遵循 ComparisonProfile；可针对这一场景覆盖。</small><select id="scenario-comparison-strategy"><option value="">使用 Profile 默认策略</option><option value="auto">自动：按友商数和预计输入量选择</option><option value="all_references">全部友商合并一次调用</option><option value="evidence_routed">按检查组路由相关证据</option><option value="pairwise">逐家 A vs B 对比</option></select></label>
+            <button class="button primary" type="submit">保存场景</button><p class="form-message" id="scenario-message"></p>
+          </form>
+        </details>
+      </section>
+
+      <section id="specs" class="workspace-section">
+        <div class="section-heading"><div><p class="eyebrow">02 / 规则</p><h2>CheckSpec</h2><p>用业务语言维护检查规则；保存前会执行完整配置校验。</p></div></div>
+        <div class="spec-workbench"><div id="spec-list" class="spec-list"></div><div class="spec-editor">
+          <div id="spec-meta" class="spec-meta">选择一条规则查看和编辑。</div>
+          <form id="spec-form" class="spec-form" hidden>
+            <div class="editor-section"><div class="editor-section-title">规则说明 <span>定义这条规则检查什么、适用于哪里。</span></div>
+              <div class="spec-grid two"><label>规则 ID <small>系统唯一标识。已被检查计划引用，不能修改。</small><input id="spec-id" readonly /></label><label>版本号 <small>每次调整检查逻辑或判断口径后递增，方便追踪报告来源。</small><input id="spec-version" required placeholder="例如 1.2.0" /></label></div>
+              <label>规则标题 <small>报告中给业务方看到的问题名称，应直接描述用户体验预期。</small><input id="spec-title" required /></label>
+              <label>检查说明 <small>告诉执行器检查的范围、判断口径和不应误报的情形。</small><textarea id="spec-description" rows="4" required></textarea></label>
+              <div class="spec-grid two"><label>检查范围 <small>页面：单页；阶段衔接：前后页面动作；旅程：多个阶段；对比：本产品与参考产品。</small><select id="spec-scope"><option value="page">单页面</option><option value="transition">阶段衔接</option><option value="journey">用户旅程</option><option value="comparison">产品对比</option></select></label><label>默认优先级 <small>P0 阻断核心任务；P1 重要体验或信任风险；P2 可优化项。</small><select id="spec-severity"><option value="p0">P0 · 阻断</option><option value="p1">P1 · 重要</option><option value="p2">P2 · 优化</option></select></label></div>
+              <label>标签 <small>用逗号分隔，用于归类与筛选，例如 content, trust。</small><input id="spec-tags" placeholder="content, trust" /></label>
+            </div>
+            <div class="editor-section"><div class="editor-section-title">适用条件与证据 <span>限定何时执行，并声明检查所需的页面事实。</span></div>
+              <label>适用条件 <small>高级条件，以 JSON 表示。留空表示所有符合范围的页面均执行；常用字段如 locales、archetypes、dimensions。</small><textarea id="spec-applies-when" rows="3" spellcheck="false" placeholder='例如 {"locales":["zh-CN"]}'></textarea></label>
+              <fieldset><legend>所需证据 <small>执行前必须采集到的事实。选择不足会导致规则无法可靠判断。</small></legend><div id="evidence-options" class="choice-grid"></div></fieldset>
+            </div>
+            <div class="editor-section"><div class="editor-section-title">执行方式 <span>绑定已注册的能力；能力本身决定使用代码检查或模型判断。</span></div>
+              <div class="spec-grid two"><label>执行器类型 <small>确定性：Python 代码；模型技能：将证据交给文本或视觉模型判断。</small><select id="executor-type"><option value="deterministic">确定性检查器</option><option value="model_skill">模型技能</option></select></label><label>执行能力 <small>从已登记能力中选择。它定义可用范围、最少证据及实际实现。</small><select id="executor-capability"></select></label></div>
+              <label>能力版本 <small>固定本次规则依赖的能力版本；未单独版本化时保留 1.0.0。</small><input id="executor-version" required /></label>
+            </div>
+            <div id="comparison-policy" class="editor-section" hidden><div class="editor-section-title">跨页面比较方式 <span>仅用于“用户旅程”规则，定义要比较哪些节点。</span></div>
+              <div class="spec-grid two"><label>比较模式 <small>相邻：按旅程顺序比较；锚点对每页：首个节点逐一比较；全量：每个节点两两比较。</small><select id="comparison-mode"><option value="adjacent">相邻节点</option><option value="anchor_to_each">锚点对每页</option><option value="all_observed">全部节点</option></select></label><label>最少节点数 <small>少于此数量时不运行，避免在证据不足时做跨阶段结论。</small><input id="comparison-min-nodes" type="number" min="2" value="2" /></label></div>
+              <label>必须比较的事实维度 <small>用逗号分隔，例如 pricing、offering。只有已采集到这些维度，才形成跨页结论。</small><input id="comparison-facets" /></label>
+            </div>
+            <div class="editor-section"><div class="editor-section-title">规范依据 <span>每条规则至少关联一项内部或外部规范，用来解释“为什么检查”。</span></div><div id="standard-refs" class="standard-refs"></div></div>
+          </form>
+          <details class="advanced-yaml"><summary>高级模式：直接编辑 YAML <span>适合维护未覆盖的字段；保存后会回填到表单。</span></summary><textarea id="spec-yaml" spellcheck="false" placeholder="CheckSpec YAML"></textarea><button class="button quiet" id="save-yaml" type="button" disabled>保存 YAML 并校验</button></details>
+          <div class="editor-footer"><button class="button primary" id="save-spec" disabled>保存规则并校验</button><span id="spec-message" class="form-message"></span></div>
+        </div></div>
+      </section>
+
+      <section id="runs" class="workspace-section">
+        <div class="section-heading"><div><p class="eyebrow">03 / 结果</p><h2>本次运行</h2><p>检查会在当前本地进程内持续运行；可随时停止，完成后打开独立 HTML 报告。</p><p id="run-message" class="form-message" aria-live="polite"></p></div><button class="button quiet" id="refresh-runs">刷新状态</button></div>
+        <div id="run-list" class="run-list"><div class="empty">尚未从控制台启动检查。</div></div>
+      </section>
+    </main>
+    <template id="scenario-template"><article class="scenario-card"><div class="scenario-state"></div><div class="scenario-main"><p class="scenario-kind"></p><h3></h3><p class="scenario-description"></p><p class="scenario-target"></p></div><button class="button run">运行检查</button></article></template>
+    <script src="/assets/app.js"></script>
+  </body>
+</html>

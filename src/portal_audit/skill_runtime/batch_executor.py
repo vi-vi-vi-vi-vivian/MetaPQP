@@ -6,6 +6,10 @@ import json
 from collections import Counter
 
 from portal_audit.application.ports.model import ModelPort, ModelRequest, TextContent
+from portal_audit.application.services.model_prompt_trace import (
+    model_request_trace,
+    safe_model_error,
+)
 from portal_audit.domain.models import (
     CheckExecutionResult,
     CheckRun,
@@ -101,13 +105,29 @@ class BatchModelSkillExecutor:
             },
             ensure_ascii=False,
         )
-        completion = await self.model.complete_json(
-            ModelRequest(
-                system=system,
-                content=[TextContent(user)],
-                schema=batch_result_schema([spec.id for spec in specs]),
-            )
+        request = ModelRequest(
+            system=system,
+            content=[TextContent(user)],
+            schema=batch_result_schema([spec.id for spec in specs]),
         )
+        try:
+            completion = await self.model.complete_json(request)
+        except Exception as error:  # noqa: BLE001 - a provider must not abort a page audit
+            detail = safe_model_error(error)
+            return CheckExecutionResult(
+                check_runs=[self._error_run(spec, detail) for spec in specs],
+                model_calls=[
+                    ModelCallRecord(
+                        batch_id=batch_id,
+                        check_spec_ids=[spec.id for spec in specs],
+                        provider=type(self.model).__name__,
+                        model=str(getattr(self.model, "model", "unknown")),
+                        error_type=type(error).__name__,
+                        error_detail=detail,
+                        prompt_trace=model_request_trace(request),
+                    )
+                ],
+            )
         raw_results = list(completion.content.get("results", []))
         counts = Counter(str(item.get("check_spec_id", "")) for item in raw_results)
         unique_results = {
@@ -131,6 +151,7 @@ class BatchModelSkillExecutor:
                     total_tokens=completion.total_tokens,
                     latency_ms=completion.latency_ms,
                     usage_details=dict(completion.usage_details),
+                    prompt_trace=model_request_trace(request),
                 )
             ],
         )
@@ -159,6 +180,19 @@ class BatchModelSkillExecutor:
             status=CheckStatus.ERROR,
             title=spec.title,
             reason="未执行：文本模型未配置",
+            severity=spec.default_severity,
+            confidence=0,
+            executor_id=spec.executor.capability_id,
+        )
+
+    @staticmethod
+    def _error_run(spec: CheckSpec, detail: str) -> CheckRun:
+        return CheckRun(
+            check_spec_id=spec.id,
+            check_spec_version=spec.version,
+            status=CheckStatus.ERROR,
+            title=spec.title,
+            reason=f"未执行：模型调用失败（{detail}）",
             severity=spec.default_severity,
             confidence=0,
             executor_id=spec.executor.capability_id,

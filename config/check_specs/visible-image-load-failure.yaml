@@ -1,0 +1,12 @@
+id: visible-image-load-failure
+version: 1.0.0
+title: 可见产品图像不应加载失败
+description: 检查具有实际展示尺寸的 img 是否已完成加载但 naturalWidth 为 0。仅报告可见且可定位的资源失败；未触发的懒加载、不可见装饰资源或无法确认的网络信号不报告。
+tags: [baseline, reliability, image]
+applies_when: {}
+required_evidence: [evidence_elements, network]
+executor: {type: deterministic, capability_id: visible-image-load-failure-checker, version: 1.0.0}
+default_severity: p1
+standard_refs:
+  - criterion_id: nielsen-heuristics/H1
+    relation: supports

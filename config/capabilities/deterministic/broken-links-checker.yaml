@@ -5,4 +5,3 @@ supported_scopes: [page]
 required_evidence: [interactive_elements]
 implementation:
   entrypoint: "portal_audit.capabilities.checkers.page:BrokenLinksChecker"
-  init: {max_links: "$settings.browser_max_links"}

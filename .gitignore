@@ -10,6 +10,7 @@ __pycache__/
 # Local browser and workflow diagnostics
 .playwright-cli/
 logs/
+tmp/
 
 # Runtime state and generated audit artifacts
 data/

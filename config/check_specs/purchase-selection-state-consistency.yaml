@@ -1,0 +1,13 @@
+id: purchase-selection-state-consistency
+version: 1.0.0
+title: 购买配置选择应与订单摘要同步
+description: 点击套餐、规格或购买时长后，卡片选中态和订单摘要应共同反映用户选择。
+scope: transition
+tags: [purchase, interaction, selection, pricing]
+applies_when: {origins: [page], interaction_kinds: [quote_configuration]}
+required_evidence: [transition_trace, start_snapshot, end_snapshot, quote_state]
+executor: {type: deterministic, capability_id: purchase-selection-state-consistency-checker}
+default_severity: p1
+standard_refs:
+  - criterion_id: metapqp-internal/purchase-selection-state-consistency
+    relation: implements

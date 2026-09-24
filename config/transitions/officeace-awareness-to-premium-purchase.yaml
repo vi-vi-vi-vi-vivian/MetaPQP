@@ -1,0 +1,18 @@
+id: officeace-awareness-to-premium-purchase
+version: 1.0.0
+title: 从 OfficeAce 感知页进入个人旗舰版购买页
+from: officeace-awareness
+to: officeace-purchase-premium
+action:
+  type: click
+  target:
+    role: button
+    name: 立即购买
+    exact: true
+    occurrence: 2
+end_condition:
+  page_map_node: officeace-purchase-premium
+  url_contains: officeace.personal.package.premium
+risk_level: confirmation_only
+safe_stop: purchase_page_loaded
+auto_run: false

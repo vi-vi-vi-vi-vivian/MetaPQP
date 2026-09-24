@@ -1,0 +1,9 @@
+id: officeace-awareness-standard-purchase-preview
+version: 1.0.0
+title: OfficeAce 感知到个人标准版购买预览
+goal: 验证用户从 OfficeAce 个人标准版套餐入口进入正确购买页，并在任何订单提交前停止。
+execution_mode: sequential
+start: officeace-awareness
+transitions:
+  - officeace-awareness-to-standard-purchase
+safety_profile: production-readonly

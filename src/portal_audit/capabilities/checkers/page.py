@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from collections import Counter
-
 import httpx
 
 from portal_audit.domain.models import (
@@ -155,16 +153,20 @@ class RuntimeErrorsChecker:
 class BrokenLinksChecker:
     id = "broken-links-checker"
 
-    def __init__(self, max_links: int = 20):
-        self.max_links = max_links
-
     async def execute(self, spec: CheckSpec, snapshot: PageSnapshot) -> CheckRun:
+        # Newly disclosed links are often the only route to billing, policy or
+        # product detail. Check them before the initial page's navigation links.
         links = [
             item.href
-            for item in snapshot.interactive_elements
+            for item in sorted(snapshot.interactive_elements, key=lambda item: item.element_ref is not None)
             if item.href and item.href.startswith(("http://", "https://"))
         ]
-        unique_links = list(Counter(links))[: self.max_links]
+        unique_links = list(dict.fromkeys(links))
+        browser_probe_statuses = {
+            str(item.get("url")): item.get("status")
+            for item in snapshot.link_probe_results
+            if item.get("url") and item.get("status") is not None
+        }
         broken: list[str] = []
         protected: list[str] = []
         transient: list[str] = []
@@ -172,17 +174,22 @@ class BrokenLinksChecker:
         async with httpx.AsyncClient(follow_redirects=True, timeout=10) as client:
             for url in unique_links:
                 try:
-                    response = await client.head(url)
-                    # HEAD is only an optimization. Some valid sites do not implement it
-                    # consistently and return 4xx while a normal navigation succeeds.
-                    if response.status_code >= 400:
-                        response = await client.get(url, headers={"Range": "bytes=0-0"})
-                    if response.status_code in {401, 403, 418, 429}:
-                        protected.append(f"{response.status_code} {url}")
-                    elif response.status_code >= 500:
-                        transient.append(f"{response.status_code} {url}")
-                    elif response.status_code >= 400:
-                        broken.append(f"{response.status_code} {url}")
+                    browser_status = browser_probe_statuses.get(url)
+                    if browser_status is not None:
+                        status_code = int(browser_status)
+                    else:
+                        response = await client.head(url)
+                        # HEAD is only an optimization. Some valid sites do not implement it
+                        # consistently and return 4xx while a normal navigation succeeds.
+                        if response.status_code >= 400:
+                            response = await client.get(url, headers={"Range": "bytes=0-0"})
+                        status_code = response.status_code
+                    if status_code in {401, 403, 418, 429}:
+                        protected.append(f"{status_code} {url}")
+                    elif status_code >= 500:
+                        transient.append(f"{status_code} {url}")
+                    elif status_code >= 400:
+                        broken.append(f"{status_code} {url}")
                 except httpx.HTTPError as exc:
                     unverified.append(f"unverified {url}: {type(exc).__name__}")
         status = (
@@ -208,10 +215,10 @@ class BrokenLinksChecker:
             status=status,
             title=spec.title,
             reason=(
-                f"checked_links={len(unique_links)}, broken_links={len(broken)}, "
-                f"protected_or_rate_limited={len(protected)}, "
-                f"transient_server_errors={len(transient)}, "
-                f"unverified_links={len(unverified)}"
+                f"共检查 {len(unique_links)} 个不同链接，确认失效 {len(broken)} 个。"
+                f"另有 {len(protected)} 个因访问权限或频率限制无法确认，"
+                f"{len(transient)} 个遇到服务器暂时异常，{len(unverified)} 个因网络请求失败未完成验证。"
+                + ("这些待确认链接不能直接认定为死链，需在浏览器中复查。" if protected or transient or unverified else "")
             ),
             severity=spec.default_severity,
             evidence=(broken if broken else protected + transient + unverified)[:10],
@@ -231,7 +238,12 @@ class ImageAltChecker:
     id = "image-alt-checker"
 
     async def execute(self, spec: CheckSpec, snapshot: PageSnapshot) -> CheckRun:
-        images = [item for item in snapshot.evidence_elements if item.tag == "img"]
+        # Global header/footer imagery belongs to shared-site accessibility
+        # coverage, not a product Page audit.
+        images = [
+            item for item in snapshot.evidence_elements
+            if item.tag == "img" and item.page_region not in {"header", "footer"}
+        ]
         missing = [item for item in images if item.has_alt is False]
         context_equivalent = [
             item for item in missing if item.accessible_name or item.surrounding_text
@@ -281,6 +293,27 @@ class ImageAltChecker:
         )
 
 
+class VisibleImageLoadFailureChecker:
+    id = "visible-image-load-failure-checker"
+
+    async def execute(self, spec: CheckSpec, snapshot: PageSnapshot) -> CheckRun:
+        failed = [
+            item for item in snapshot.evidence_elements
+            if item.tag == "img" and item.image_complete is True and item.natural_width == 0
+            and item.bounds and item.bounds.get("width", 0) > 0 and item.bounds.get("height", 0) > 0
+        ]
+        return CheckRun(
+            check_spec_id=spec.id, check_spec_version=spec.version,
+            status=CheckStatus.FAIL if failed else CheckStatus.PASS,
+            title=spec.title,
+            reason=(f"visible_images={len([x for x in snapshot.evidence_elements if x.tag == 'img'])}, "
+                    f"confirmed_load_failures={len(failed)}"),
+            severity=spec.default_severity,
+            evidence=[f"{item.current_src or item.href or item.selector}: naturalWidth=0" for item in failed[:10]],
+            locations=[element_location(item) for item in failed[:10]],
+            suggestion="修复图片资源地址或发布配置；确认可见产品图、Logo 与图标在匿名及登录态下均可加载。" if failed else None,
+            executor_id=self.id,
+        )
 class MobileHorizontalOverflowChecker:
     id = "mobile-horizontal-overflow-checker"
 

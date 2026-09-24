@@ -1,10 +1,10 @@
 id: journey-transition-reachability
 version: 1.0.0
-title: 安全跳转应到达预期页面
-description: 执行已登记动作后，应命中 Transition 声明的终点 PageMapNode。
+title: 点击后应到达可用目标
+description: 安全执行交互后，应获得可用页面、弹窗或已登记的目标页面。
 scope: transition
 tags: [journey, transition, navigation]
-applies_when: {}
+applies_when: {origins: [page, journey]}
 required_evidence: [transition_trace, end_node_resolution]
 executor: {type: deterministic, capability_id: journey-transition-reachability-checker}
 default_severity: p1
