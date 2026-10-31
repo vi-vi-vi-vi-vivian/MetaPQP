@@ -1,0 +1,468 @@
+{
+  "dimensions": [
+    {
+      "id": "D1",
+      "name": "信息发现与理解",
+      "question": "用户能找到并理解所需信息吗？",
+      "scope": "页面身份、文案、术语与入口含义",
+      "gap": "尚不能证明站内搜索、全站信息架构和真实用户理解度已充分覆盖。"
+    },
+    {
+      "id": "D2",
+      "name": "产品评估与选择",
+      "question": "用户能判断是否适合自己、该选哪种吗？",
+      "scope": "产品价值、方案比较与选型依据",
+      "gap": "6 项映射中有 4 项是参考对比；本批未开展参考对比，也未验证真实用户选型效果。"
+    },
+    {
+      "id": "D3",
+      "name": "商业透明与可信",
+      "question": "用户能核对购买内容、费用和承诺吗？",
+      "scope": "价格、计价、权益、续费与退订",
+      "gap": "仅到配置阶段；后续确认、付款及实际退订政策执行未验证。"
+    },
+    {
+      "id": "D4",
+      "name": "操作完成与恢复",
+      "question": "用户能完成操作，并在出错后继续吗？",
+      "scope": "跳转、反馈、登录恢复与选择保持",
+      "gap": "只覆盖已采集动作；未提交订单，异常输入与中断恢复尚未形成完整验证。"
+    },
+    {
+      "id": "D5",
+      "name": "访问与运行质量",
+      "question": "用户在目标环境下能访问并使用吗？",
+      "scope": "加载、资源、运行影响、触控与可访问名称",
+      "gap": "网络异常仍有待确认；未进行性能弱网、全浏览器或完整无障碍评估。"
+    },
+    {
+      "id": "D6",
+      "name": "视觉与信息呈现",
+      "question": "关键信息是否清楚可见、可读？",
+      "scope": "溢出、布局、裁切与遮挡",
+      "gap": "自动视觉服务失败；仅对三页已保存静态切片补充复核，不代表动态状态或品牌视觉已验证。"
+    }
+  ],
+  "rules": [
+    {
+      "number": "01",
+      "title": "页面正常加载",
+      "id": "page-load",
+      "dimension": "D5",
+      "applicability": "页面；适用页面",
+      "change": "保留",
+      "boundary": "判断主文档与主体可用性；与 02 命中同一次主文档加载失败时只记一个问题。性能慢不等于加载失败。",
+      "basis": "内"
+    },
+    {
+      "number": "02",
+      "title": "影响核心功能的运行错误",
+      "id": "runtime-errors",
+      "dimension": "D5",
+      "applicability": "页面；有运行或网络证据",
+      "change": "收窄边界、合并重复问题",
+      "boundary": "Console 报错本身不判缺陷，需证明影响主体、价格或核心操作；主文档失败归 01，运行错误作为关联证据。",
+      "basis": "内"
+    },
+    {
+      "number": "03",
+      "title": "可见链接有效性",
+      "id": "broken-links",
+      "dimension": "D5",
+      "applicability": "页面；可见 HTTP 链接",
+      "change": "保留，关联交互证据",
+      "boundary": "确认失效与鉴权、限流、网络异常分开；与 20 命中同一链接、同一失效时归并。跨检查归并时采用“链接目标不可达”主问题，记录受影响动作。",
+      "basis": "内"
+    },
+    {
+      "number": "04",
+      "title": "可见产品图片加载成功",
+      "id": "visible-image-load-failure",
+      "dimension": "D5",
+      "applicability": "页面；可见且应已加载的图片",
+      "change": "保留",
+      "boundary": "判断资源加载失败，不判断图片是否美观、是否有名称；与 02 命中同一图片故障时归并，不把未触发懒加载当作失败。",
+      "basis": "N1 支持"
+    },
+    {
+      "number": "05",
+      "title": "页面具有描述主题的 Title",
+      "id": "document-structure",
+      "dimension": "D1",
+      "applicability": "页面；标题事实",
+      "change": "改名为“页面标题存在性”；与 09 合并呈现",
+      "boundary": "本项只判断标题是否非空；09 判断语义。标题为空时不再重复报告标题语义不清，统一呈现“页面身份识别”。",
+      "basis": "内；W 2.4.2 部分覆盖"
+    },
+    {
+      "number": "06",
+      "title": "明确错别字或语病",
+      "id": "copy-quality",
+      "dimension": "D1",
+      "applicability": "页面；当前仅 zh-CN",
+      "change": "保留",
+      "boundary": "只判断可证明的文本错误；不把润色偏好、专业术语不熟悉算语病。英文质量检查仍是独立缺口。",
+      "basis": "内"
+    },
+    {
+      "number": "07",
+      "title": "专业术语和计费名词清晰",
+      "id": "terminology-clarity",
+      "dimension": "D1",
+      "applicability": "页面；存在需要理解的概念",
+      "change": "收窄边界",
+      "boundary": "判断已有术语、缩写的含义是否清楚；金额缺周期、报价缺单位归 16。相同文本相同缺失不重复计数。",
+      "basis": "内；N2 启发"
+    },
+    {
+      "number": "08",
+      "title": "页面内部产品规则和承诺一致",
+      "id": "content-internal-consistency",
+      "dimension": "D3",
+      "applicability": "页面；当前产品落地页",
+      "change": "改名并收窄为“页内商业信息与承诺一致”",
+      "boundary": "保留页内价格、权益、限制、承诺冲突；名称和定位矛盾拟拆出 D1 的页内身份子检查，不能直接丢弃。拆出后的子检查需另行登记，不算本表已经实现。",
+      "basis": "内；N4 启发"
+    },
+    {
+      "number": "09",
+      "title": "页面标题与主题一致",
+      "id": "page-title-identity-consistency",
+      "dimension": "D1",
+      "applicability": "页面；标题非空且主体可辨认",
+      "change": "与 05 合并呈现",
+      "boundary": "判断标题能否识别当前产品或任务；不能仅凭标题不够详细判失败，需明确识别不足。与 05 共用一个质量目标。",
+      "basis": "内；W 2.4.2 当前标为 implements，建议明确语义证据边界"
+    },
+    {
+      "number": "10",
+      "title": "产品价值清晰",
+      "id": "product-value-clarity",
+      "dimension": "D2",
+      "applicability": "页面；产品落地页",
+      "change": "保留",
+      "boundary": "判断面向谁、解决什么问题、核心收益是否说清；不推断实际吸引力、转化率或客户满意度。",
+      "basis": "内；N2 启发"
+    },
+    {
+      "number": "11",
+      "title": "CTA 动作和结果表达清楚",
+      "id": "cta-clarity",
+      "dimension": "D1",
+      "applicability": "页面；存在购买或订阅入口",
+      "change": "保留，与动作结果分层",
+      "boundary": "点击前能否理解动作由本项判断；点击后是否兑现由 25 判断。文案清楚但落点错误时只报结果问题。",
+      "basis": "内；N2、N6 启发"
+    },
+    {
+      "number": "12",
+      "title": "最终成果在决策前可见",
+      "id": "reference-outcome-visibility",
+      "dimension": "D2",
+      "applicability": "参考对比；同类认知或购买前场景",
+      "change": "改名为“成果展示改进机会”",
+      "boundary": "静态示例、演示、可核验效果可作为证据；不要求一定有客户案例；与 13 区分“看见结果”和“亲自操作”。",
+      "basis": "内；外部研究可补充，尚未写入配置"
+    },
+    {
+      "number": "13",
+      "title": "核心价值可先体验",
+      "id": "reference-zero-cost-access",
+      "dimension": "D2",
+      "applicability": "参考对比；产品具备可体验前提",
+      "change": "改名为“可操作体验改进机会”，收窄定义",
+      "boundary": "拟仅接受可操作 Demo、试用或可用额度；静态结果示例归 12。这会改变旧判定语义，须重审历史结论；试用前提未知时待研究，明确不适用时注明原因。",
+      "basis": "内"
+    },
+    {
+      "number": "14",
+      "title": "方案选择清晰",
+      "id": "reference-option-discernibility",
+      "dimension": "D2",
+      "applicability": "参考对比；至少两个同类可选方案",
+      "change": "改名为“方案可比较性改进机会”",
+      "boundary": "检查能否用统一维度比较差异；单方案或商业模式不可比时不适用。权益本身是否矛盾归 31。",
+      "basis": "内"
+    },
+    {
+      "number": "15",
+      "title": "关键决策信息在选择前说清",
+      "id": "reference-decision-information-proximity",
+      "dimension": "D2",
+      "applicability": "参考对比；明确选择区与可比参考证据",
+      "change": "收窄为“决策信息呈现位置改进机会”",
+      "boundary": "聚焦信息出现时机、位置和查找成本；价格或风险确有缺失先由 16/18 判断，本项仅提供参考做法，不另增加缺陷。",
+      "basis": "内"
+    },
+    {
+      "number": "16",
+      "title": "价格、周期和资源量可核对",
+      "id": "pricing-transparency",
+      "dimension": "D3",
+      "applicability": "页面；展示价格",
+      "change": "保留，作为价格信息缺失的主归属",
+      "boundary": "判断币种、单位、周期、资源量、有效期、适用条件是否清楚；不做算术验算，不判断跨页冲突。分别与 17、30 区分。",
+      "basis": "内；N2 启发"
+    },
+    {
+      "number": "17",
+      "title": "配置费用符合明示计价规则",
+      "id": "price-calculation-consistency",
+      "dimension": "D3",
+      "applicability": "交互；页内报价配置，有报价状态",
+      "change": "保留",
+      "boundary": "使用已披露单价、时长、折扣复算；缺因子时待验证，不判算错。与 16 共享缺失证据，避免重复缺陷。",
+      "basis": "内"
+    },
+    {
+      "number": "18",
+      "title": "订阅与退订风险披露",
+      "id": "commitment-risk-timing",
+      "dimension": "D3",
+      "applicability": "页面；购买、订单、支付阶段的适用风险",
+      "change": "保留，明确承诺节点",
+      "boundary": "只检查实际适用的扣款、续费、退款、到期等风险；后续确认页未检查时，不断言整条流程没有披露。与 19 的参考建议分开。",
+      "basis": "内；N3、N5 启发"
+    },
+    {
+      "number": "19",
+      "title": "承诺与限制提前说明",
+      "id": "reference-commitment-boundary",
+      "dimension": "D3",
+      "applicability": "参考对比；已确认同类最终承诺节点",
+      "change": "改名为“承诺边界披露改进机会”",
+      "boundary": "用参考做法改善提示时机与形式；同一风险缺失已有 18 时挂为建议。参考站有某条限制，不代表本产品也适用。",
+      "basis": "内"
+    },
+    {
+      "number": "20",
+      "title": "点击后到达可用目标",
+      "id": "journey-transition-reachability",
+      "dimension": "D4",
+      "applicability": "交互；页面或旅程中的安全动作",
+      "change": "保留，关联静态链接检查",
+      "boundary": "判断页面、弹窗或内容目标是否可达；与 03 命中同一链接失效时归入 03 的主问题。按钮无静态链接的不可达仍由本项独立报告。",
+      "basis": "内；N2 支持"
+    },
+    {
+      "number": "21",
+      "title": "登录后恢复预期业务入口",
+      "id": "entry-and-resume-continuity",
+      "dimension": "D4",
+      "applicability": "交互；旅程中经历登录或跨站",
+      "change": "保留，限定登录条件",
+      "boundary": "必须实际完成登录后再判断恢复；未登录、验证码或权限受限记为受阻。同一恢复失败与 20/22 归并，采用更具体的“登录后任务恢复失败”。",
+      "basis": "内；N7 支持"
+    },
+    {
+      "number": "22",
+      "title": "跳转前后产品上下文连续",
+      "id": "transaction-context-continuity",
+      "dimension": "D4",
+      "applicability": "交互；旅程中对象可对应",
+      "change": "保留，明确对象边界",
+      "boundary": "判断是否进入了错误产品或业务对象；与 25/32 命中同一次错误落点归并。本项不判断同一产品的宣传定位是否一致。",
+      "basis": "内；N4 支持"
+    },
+    {
+      "number": "23",
+      "title": "点击后有可观察反馈",
+      "id": "interaction-feedback-visibility",
+      "dimension": "D4",
+      "applicability": "交互；动作确实需要反馈",
+      "change": "保留",
+      "boundary": "判断状态或内容变化是否可观察；重复点击已选项可合理不变；到达错误页也算有反馈，失败与恢复另由 20/24 判断。",
+      "basis": "N1 支持"
+    },
+    {
+      "number": "24",
+      "title": "错误页提供恢复指引",
+      "id": "interaction-failure-guidance",
+      "dimension": "D4",
+      "applicability": "交互；已确认出现错误页",
+      "change": "保留",
+      "boundary": "判断返回、重试、帮助等路径；“跳转失败”和“无恢复办法”是可独立修复的缺陷，不因同一截图强行合并。未触发错误场景不能宣称已验证恢复能力。",
+      "basis": "N9 支持"
+    },
+    {
+      "number": "25",
+      "title": "点击结果符合用户预期",
+      "id": "transition-intent-result-consistency",
+      "dimension": "D4",
+      "applicability": "交互；目标可用且前后证据充分",
+      "change": "保留，作为单次动作语义主检查",
+      "boundary": "比较点击前承诺与实际结果；404 等不可达时停止语义判定，记无法判断，不能记通过。与 32 共用同一动作结论；错误对象优先归 22。",
+      "basis": "N2 支持"
+    },
+    {
+      "number": "26",
+      "title": "配置选择与订单摘要同步",
+      "id": "purchase-selection-state-consistency",
+      "dimension": "D4",
+      "applicability": "交互；页内报价配置",
+      "change": "保留",
+      "boundary": "判断同页选中态与摘要是否一致；跨页丢失归 34；摘要对象正确但金额算错归 17。相同状态故障引发的派生现象关联呈现。",
+      "basis": "内"
+    },
+    {
+      "number": "27",
+      "title": "用户选择连续保留",
+      "id": "reference-state-continuity",
+      "dimension": "D4",
+      "applicability": "参考流程对比；实际采集至少两步操作",
+      "change": "保留为“选择保持改进机会”",
+      "boundary": "与 26/34 对同一主体状态丢失的结论共享证据；参考流程只提供改善方式，不重复计缺陷；单页静态证据不足以判断。",
+      "basis": "内"
+    },
+    {
+      "number": "28",
+      "title": "跨阶段产品身份与定位一致",
+      "id": "cross-stage-product-identity-consistency",
+      "dimension": "D1",
+      "applicability": "旅程；同一产品的多页证据",
+      "change": "保留",
+      "boundary": "判断同一产品名称、类型、主体、定位是否矛盾；合理简称不报。跳到另一个产品归 22；规格权益冲突归 31；称呼变化归 33 时不重复计数。",
+      "basis": "内；N4 支持"
+    },
+    {
+      "number": "29",
+      "title": "跨阶段决策引导连续",
+      "id": "cross-stage-decision-guidance-continuity",
+      "dimension": "D2",
+      "applicability": "旅程；后续仍需比较同组方案",
+      "change": "保留，强化影响证据",
+      "boundary": "只判断仍有决策必要的推荐依据是否丢失或无法找到等价说明；不能仅因标签没重复就判失败。影响不明时待确认。",
+      "basis": "内；N6 支持"
+    },
+    {
+      "number": "30",
+      "title": "跨阶段商业条件一致",
+      "id": "cross-stage-commercial-terms-consistency",
+      "dimension": "D3",
+      "applicability": "旅程；相同购买对象和可比条件",
+      "change": "保留",
+      "boundary": "判断价格、币种、周期、折扣、免费条件的明确冲突；先核对配置、资格、区域和采集时间，合理差异不报。政策冲突归 36。",
+      "basis": "内；N4 支持"
+    },
+    {
+      "number": "31",
+      "title": "跨阶段规格与权益一致",
+      "id": "cross-stage-offering-consistency",
+      "dimension": "D3",
+      "applicability": "旅程；相同版本或套餐",
+      "change": "保留",
+      "boundary": "判断容量、配额、权限、服务范围冲突；选择切换归 34，方案差异是否易比较归 14。",
+      "basis": "内；N4 支持"
+    },
+    {
+      "number": "32",
+      "title": "跨阶段操作预期与落地内容连续",
+      "id": "cross-stage-action-expectation-continuity",
+      "dimension": "D4",
+      "applicability": "旅程；相邻阶段动作证据",
+      "change": "与 25 合并质量目标，复用结论",
+      "boundary": "当前规则也是相邻动作语义检查，不虚构多步能力。相同动作已有 25 则复用；只有独立旅程证据时补充判定，旧 ID 保留追溯。",
+      "basis": "内；N2 支持"
+    },
+    {
+      "number": "33",
+      "title": "跨阶段术语与概念连续",
+      "id": "cross-stage-terminology-consistency",
+      "dimension": "D1",
+      "applicability": "旅程；相同对象或概念",
+      "change": "保留",
+      "boundary": "判断跨页更名、含义变化或无解释的新概念；单页术语难懂归 07；只是价格信息缺失归 16。与 28 同一身份混淆只记一次。",
+      "basis": "内；N6 支持"
+    },
+    {
+      "number": "34",
+      "title": "跨阶段默认项与用户选择连续",
+      "id": "cross-stage-selection-continuity",
+      "dimension": "D4",
+      "applicability": "旅程；有初始选择及后续回显证据",
+      "change": "保留",
+      "boundary": "判断是否无说明地改变已选对象或默认项；不判断推荐标签、排序；与 27 同一丢失只形成一项缺陷。",
+      "basis": "内；N4 支持"
+    },
+    {
+      "number": "35",
+      "title": "跨阶段产品或资源状态一致",
+      "id": "cross-stage-lifecycle-state-consistency",
+      "dimension": "D4",
+      "applicability": "旅程；账号、区域、对象和时间可比",
+      "change": "保留，按场景启用",
+      "boundary": "判断开通、使用、到期、禁用等状态同步；不推断后台真实状态。购买前未观察到这些状态时，不纳入已验证能力。",
+      "basis": "内；N1 支持"
+    },
+    {
+      "number": "36",
+      "title": "跨阶段持续承诺、变更与退出规则一致",
+      "id": "cross-stage-commitment-policy-consistency",
+      "dimension": "D3",
+      "applicability": "旅程；适用政策的多页证据",
+      "change": "保留",
+      "boundary": "判断续费、变更、退款、退订、释放政策冲突；是否缺少披露由 18 判断。与 30 的交界：金额或折扣冲突归 30，政策机制冲突归本项。",
+      "basis": "内；N5 支持"
+    },
+    {
+      "number": "37",
+      "title": "可点击图片控件有可访问名称",
+      "id": "image-alt",
+      "dimension": "D5",
+      "applicability": "页面；当前不限设备，存在图片操作控件",
+      "change": "从移动端专属类移出",
+      "boundary": "判断整个控件是否有名称，不机械要求每张图片都有 Alt；普通图片用途未知时待确认。图片加载失败归 04。",
+      "basis": "内；W 1.1.1 部分覆盖"
+    },
+    {
+      "number": "38",
+      "title": "移动端无意外横向溢出",
+      "id": "mobile-horizontal-overflow",
+      "dimension": "D6",
+      "applicability": "页面；当前 390 CSS px 移动视口",
+      "change": "保留设备标签，改主归属",
+      "boundary": "排除设计性横向滚动；与 40 命中同一溢出只报具体缺陷。单视口通过不代表所有尺寸通过，也不代表完整 Reflow 合规。",
+      "basis": "内；W 1.4.10 部分覆盖"
+    },
+    {
+      "number": "39",
+      "title": "移动端关键控件触控区域足够",
+      "id": "mobile-tap-target-size",
+      "dimension": "D5",
+      "applicability": "页面；移动端关键控件",
+      "change": "保留，明确只是尺寸检查",
+      "boundary": "当前未完整判断间距和例外；尺寸不足先作为尺寸风险，确认例外条件后才能判条款不满足。不与视觉美观混为一谈。",
+      "basis": "内；W 2.5.8 部分覆盖"
+    },
+    {
+      "number": "40",
+      "title": "移动端无明显响应式破版",
+      "id": "responsive-visual-integrity",
+      "dimension": "D6",
+      "applicability": "页面；当前移动端官网页面",
+      "change": "收窄为“其他响应式布局异常”",
+      "boundary": "作为兜底，检查未被 38/41/42 覆盖的错位、异常缩放、布局断裂；已由细项报告的同一缺陷不再单独计数。",
+      "basis": "内；W 1.4.10 部分覆盖；N4 支持"
+    },
+    {
+      "number": "41",
+      "title": "移动端关键文本无异常裁切",
+      "id": "text-clipping-and-truncation",
+      "dimension": "D6",
+      "applicability": "页面；当前移动端官网页面",
+      "change": "保留",
+      "boundary": "判断容器或布局造成的文字截断；正常省略策略不直接报错。其他元素覆盖文字归 42，不再同时算裁切。",
+      "basis": "内；W 1.4.10 部分覆盖"
+    },
+    {
+      "number": "42",
+      "title": "移动端关键内容无意外遮挡",
+      "id": "visible-content-occlusion",
+      "dimension": "D6",
+      "applicability": "页面；当前移动端官网页面",
+      "change": "保留",
+      "boundary": "判断浮层、粘性元素等覆盖文本或控件；与 40 同一遮挡归本项。多个独立位置需分别保留实例，不能仅因检查项相同就合并。",
+      "basis": "内；N1 支持"
+    }
+  ]
+}
